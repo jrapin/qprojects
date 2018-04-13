@@ -1,0 +1,2 @@
+# qprojects
+Self teaching projects
