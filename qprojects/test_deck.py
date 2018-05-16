@@ -29,6 +29,8 @@ def test_card_points_suit_and_value():
     np.testing.assert_equal(card.get_points("❤"), 2)
     np.testing.assert_equal(card.suit, "♦")
     np.testing.assert_equal(card.value, "J")
+    card = _deck.Card("10", "♦")
+    np.testing.assert_equal(card.value, "10")
 
 
 def test_game_initialization():
@@ -56,11 +58,14 @@ class GameTests(TestCase):
     @genty.genty_dataset(
         same_suit=(True, ["8♦", "Q♦"], ["9♦", "K♦"]),
         same_suit_trump_by_partner=(True, ["8❤", "Q♦"], ["A❤"]),
+        same_suit_high_trump_by_partner=(True, ["J❤", "Q♦"], ["7❤", "A❤"]),
         no_card=(True, ["7♣", "8♣"], ["7❤", "A❤"]),
         no_card_with_lead=(True, ["9♣", "8♣"], ["7❤", "A❤", "K♦", "Q♠", "9♦", "J♠"]),
         no_card_with_trump=(True, ["8♣", "8❤"], ["A❤"]),
+        no_card_with_high_trump=(True, ["8♣", "J❤"], ["7❤", "A❤"]),
         no_card_with_trump_lead=(True, ["8♣", "8❤", "9♣"], ["A❤", "K♦", "Q♠", "9♦", "J♠"]),
         no_card_no_trump=(False, ["8♣", "8❤"], ["K♦", "Q♠", "9♦", "J♠"]),
+        fist_no_trump=(False, [], ["K♦", "Q♠", "9♦", "J♠"]),
     )
     def test_get_playable_cards(self, has_trump, round_cards, expected):
         expected = [C(*x) for x in expected]
@@ -68,4 +73,11 @@ class GameTests(TestCase):
         hand_cards = [C(*"9♦"), C(*"K♦"), C(*"Q♠"), C(*"J♠")] + ([C(*"A❤"), C(*"7❤")] if has_trump else [])
         playable = _deck.get_playable_cards(hand_cards, round_cards, "❤")
         _utils.assert_set_equal(playable, expected)
+
+
+def test_game():
+    game = _deck.Game([_deck.DefaultPlayer() for _ in range(4)])
+    game.trump_suit = "❤"
+    game.play_game(verbose=True)
+    raise Exception
 

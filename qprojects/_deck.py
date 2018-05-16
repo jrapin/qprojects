@@ -31,7 +31,7 @@ class Card:
 
     @property
     def value(self):
-        return self._value_suit[0]
+        return self._value_suit[:-1]
 
     @property
     def suit(self):
@@ -41,6 +41,7 @@ class Card:
         return _POINTS[self._value_suit[0]][self._value_suit[1] == trump_suit]
 
     def get_order(self, trump_suit):
+        l = TRUMP_ORDER if self.suit == trump_suit else VALUES
         return (TRUMP_ORDER if self.suit == trump_suit else VALUES).index(self.value)  # to be tested
         
 
@@ -82,17 +83,51 @@ class DefaultPlayer:
         assert len(cards) == 8
         self._cards = cards
 
+    def get_played_card(self, round_cards, trump_suit):
+        playable = get_playable_cards(self._cards, round_cards, trump_suit)
+        selected = np.random.choice(playable)
+        self._cards.remove(selected)
+        return selected
+
 
 class Game:
     
     def __init__(self, players):
         self.players = players
+        self.trump_suit = None
+        self.initialize()
+
+    def initialize(self):
         cards = [Card(v, s) for s in SUITS for v in VALUES]
         np.random.shuffle(cards)
-        print(cards)
         for k in range(4):
             self.players[k].cards = CardList(cards[8 * k: 8 * (k + 1)])
 
+    def play_round(self, first_player_index):
+        if self.trump_suit is None:
+            raise RuntimeError("Trump suit should be specified")
+        round_cards = []
+        for k in range(4):
+            index = (first_player_index + k) % 4
+            selected = self.players[index].get_played_card(round_cards, self.trump_suit)
+            round_cards.append(selected)
+        return round_cards
+
+    def play_game(self, verbose=False):  # still buggy
+        first_player_index = 0
+        for k in range(1, 9):
+            round_cards = self.play_round(first_player_index)
+            highest_card = get_highest_card(round_cards, self.trump_suit)
+            winner = round_cards.index(highest_card)
+            if verbose:
+                strings = ["Round #{}".format(k)]
+                for j, c in enumerate(round_cards):
+                    strings.append("  Player #{}: {}{}{}".format(1 + (first_player_index + j) % 4, c,
+                                                                 " *" if c.suit == self.trump_suit else "  ",
+                                                                 "#" if j == winner else " "))
+                print("\n".join(strings))
+            first_player_index = (winner + first_player_index) % 4
+                
 
 def get_highest_card(cards, trump_suit):
     """Returns the highest card among a set of cards
@@ -138,7 +173,8 @@ def get_playable_cards(hand_cards, round_cards, trump_suit):
     playable = hand_cards_dict.get(trump_suit, [])
     highest_card = get_highest_card(round_cards, trump_suit)
     if highest_card.suit == trump_suit:
-        playable = [c for c in playable if c.get_order(trump_suit) > highest_card.get_order(trump_suit)]
+        over = [c for c in playable if c.get_order(trump_suit) > highest_card.get_order(trump_suit)]
+        playable = over if over else playable
     # other cards if no trump or partner lead: everything else is available
     if not playable or (first_suit != trump_suit and len(round_cards) - round_cards.index(highest_card) == 2):
         playable.extend([c for suit, cards in hand_cards_dict.items() for c in cards if suit != trump_suit])
