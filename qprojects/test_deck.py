@@ -1,5 +1,9 @@
+from unittest import TestCase
+import genty
 import numpy as np
 from . import _deck
+from . import _utils
+from ._deck import Card as C
 
 
 def test_card_equality():
@@ -19,10 +23,12 @@ def test_card_hash():
     assert {card1, card2, card3} == {card1, card3}
 
 
-def test_card_points():
+def test_card_points_suit_and_value():
     card = _deck.Card(*"J♦")
-    np.testing.assert_equal(card.points("♦"), 20)
-    np.testing.assert_equal(card.points("❤"), 2)
+    np.testing.assert_equal(card.get_points("♦"), 20)
+    np.testing.assert_equal(card.get_points("❤"), 2)
+    np.testing.assert_equal(card.suit, "♦")
+    np.testing.assert_equal(card.value, "J")
 
 
 def test_game_initialization():
@@ -32,4 +38,34 @@ def test_game_initialization():
     playable = {c for p in game.players for c in p.cards}
     assert len(playable) == 32
     
+
+@genty.genty
+class GameTests(TestCase):
+
+    @genty.genty_dataset(
+        no_trump=("♣", "K♦"),
+        first_trump=("♦", "9♦"),
+        other_trump=("♠", "J♠"),
+    )
+    def test_get_highest_card(self, trump_suit, expected):
+        cards = [C(*"9♦"), C(*"K♦"), C(*"Q♠"), C(*"J♠"), C(*"A❤")]
+        highest_card = _deck.get_highest_card(cards, trump_suit)
+        np.testing.assert_equal(highest_card, C(*expected))
+
+
+    @genty.genty_dataset(
+        same_suit=(True, ["8♦", "Q♦"], ["9♦", "K♦"]),
+        same_suit_trump_by_partner=(True, ["8❤", "Q♦"], ["A❤"]),
+        no_card=(True, ["7♣", "8♣"], ["7❤", "A❤"]),
+        no_card_with_lead=(True, ["9♣", "8♣"], ["7❤", "A❤", "K♦", "Q♠", "9♦", "J♠"]),
+        no_card_with_trump=(True, ["8♣", "8❤"], ["A❤"]),
+        no_card_with_trump_lead=(True, ["8♣", "8❤", "9♣"], ["A❤", "K♦", "Q♠", "9♦", "J♠"]),
+        no_card_no_trump=(False, ["8♣", "8❤"], ["K♦", "Q♠", "9♦", "J♠"]),
+    )
+    def test_get_playable_cards(self, has_trump, round_cards, expected):
+        expected = [C(*x) for x in expected]
+        round_cards = [C(*x) for x in round_cards]
+        hand_cards = [C(*"9♦"), C(*"K♦"), C(*"Q♠"), C(*"J♠")] + ([C(*"A❤"), C(*"7❤")] if has_trump else [])
+        playable = _deck.get_playable_cards(hand_cards, round_cards, "❤")
+        _utils.assert_set_equal(playable, expected)
 
