@@ -10,24 +10,24 @@ class Suits:
 
 
 SUITS = (Suits.heart, Suits.diamonds, Suits.spades, Suits.clubs)
-VALUES = ("7", "8", "9", "10", "J", "Q", "K", "A")
+VALUES = ("7", "8", "9", "J", "Q", "K", "10", "A")
 TRUMP_ORDER = ("7", "8", "Q", "K", "10", "A", "9", "J")
 _POINTS = {"7": (0, 0),  # points provided as: (regular, trump)
            "8": (0, 0),
            "9": (0, 14),
-           "10": (10, 10),
            "J": (2, 20),
            "Q": (3, 3),
            "K": (4, 4),
+           "10": (10, 10),
            "A": (11, 11)}
 
 
 class Card:
 
     def __init__(self, value, suit):
+        self._value_suit = value + suit
         assert suit in SUITS, 'Unknown suit "{}"'.format(suit)
         assert value in _POINTS, 'Unknown value "{}"'.format(value)
-        self._value_suit = value + suit
 
     @property
     def value(self):
@@ -35,7 +35,7 @@ class Card:
 
     @property
     def suit(self):
-        return self._value_suit[1]
+        return self._value_suit[-1]
 
     def get_points(self, trump_suit):
         return _POINTS[self._value_suit[0]][self._value_suit[1] == trump_suit]
@@ -122,9 +122,10 @@ class Game:
             if verbose:
                 strings = ["Round #{}".format(k)]
                 for j, c in enumerate(round_cards):
-                    strings.append("  Player #{}: {}{}{}".format(1 + (first_player_index + j) % 4, c,
-                                                                 " *" if c.suit == self.trump_suit else "  ",
-                                                                 "#" if j == winner else " "))
+                    strings.append("  Player #{}: {}{}{}{}".format(1 + (first_player_index + j) % 4,
+                                                                   "" if c.value == "10" else " ", c,
+                                                                   " *" if c.suit == self.trump_suit else "  ",
+                                                                   "#" if j == winner else " "))
                 print("\n".join(strings))
             first_player_index = (winner + first_player_index) % 4
                 

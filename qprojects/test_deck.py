@@ -1,3 +1,4 @@
+#-*- coding: utf-8 -*
 from unittest import TestCase
 import genty
 import numpy as np
@@ -29,8 +30,9 @@ def test_card_points_suit_and_value():
     np.testing.assert_equal(card.get_points("❤"), 2)
     np.testing.assert_equal(card.suit, "♦")
     np.testing.assert_equal(card.value, "J")
-    card = _deck.Card("10", "♦")
+    card2 = _deck.Card("10", "♦")
     np.testing.assert_equal(card.value, "10")
+    np.testing.assert_equal(card.suit, "♦")
 
 
 def test_game_initialization():
