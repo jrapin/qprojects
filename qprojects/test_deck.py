@@ -30,13 +30,13 @@ def test_card_points_suit_and_value():
     np.testing.assert_equal(card.get_points("❤"), 2)
     np.testing.assert_equal(card.suit, "♦")
     np.testing.assert_equal(card.value, "J")
-    card2 = _deck.Card("10", "♦")
+    card = _deck.Card("10", "♦")
     np.testing.assert_equal(card.value, "10")
     np.testing.assert_equal(card.suit, "♦")
 
 
 def test_game_initialization():
-    np.random.seed(12)
+    #np.random.seed(12)
     game = _deck.Game([_deck.DefaultPlayer() for _ in range(4)])
     # check no duplicate
     playable = {c for p in game.players for c in p.cards}

@@ -90,11 +90,35 @@ class DefaultPlayer:
         return selected
 
 
+class Round(CardList):
+
+    def __init__(self, starting_player, trump_suit):
+        super().__init__([])
+        self.starting_player = starting_player
+        self.trump_suit = trump_suit
+
+    def count_points(self):
+        return super().count_points(self.trump_suit)
+
+    def __str__(self):
+        highest = get_highest_card(self, self.trump_suit)
+        strings = ["Player #{} starts:   ".format(1 + self.starting_player)]
+        for card in self:
+            h = card == highest
+            params = ["[" if h else " ", "" if card.value == "10" else " ",
+                      card, " *" if card.suit == self.trump_suit else "  ", "]" if h else " "]
+            strings.append("{}{}{}{}{}  ".format(*params))
+        return "".join(strings)
+
+
+
 class Game:
     
     def __init__(self, players):
         self.players = players
         self.trump_suit = None
+        self.biddings = []
+        self.rounds = []
         self.initialize()
 
     def initialize(self):
@@ -106,7 +130,7 @@ class Game:
     def play_round(self, first_player_index):
         if self.trump_suit is None:
             raise RuntimeError("Trump suit should be specified")
-        round_cards = []
+        round_cards = Round(first_player_index, self.trump_suit)
         for k in range(4):
             index = (first_player_index + k) % 4
             selected = self.players[index].get_played_card(round_cards, self.trump_suit)
@@ -120,13 +144,7 @@ class Game:
             highest_card = get_highest_card(round_cards, self.trump_suit)
             winner = round_cards.index(highest_card)
             if verbose:
-                strings = ["Round #{}".format(k)]
-                for j, c in enumerate(round_cards):
-                    strings.append("  Player #{}: {}{}{}{}".format(1 + (first_player_index + j) % 4,
-                                                                   "" if c.value == "10" else " ", c,
-                                                                   " *" if c.suit == self.trump_suit else "  ",
-                                                                   "#" if j == winner else " "))
-                print("\n".join(strings))
+                print("Round #{} - {}".format(k, str(round_cards)))
             first_player_index = (winner + first_player_index) % 4
                 
 
