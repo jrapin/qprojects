@@ -38,7 +38,7 @@ class Card:
         return self._value_suit[-1]
 
     def get_points(self, trump_suit):
-        return _POINTS[self._value_suit[0]][self._value_suit[1] == trump_suit]
+        return _POINTS[self._value_suit[:-1]][self._value_suit[-1] == trump_suit]
 
     def get_order(self, trump_suit):
         l = TRUMP_ORDER if self.suit == trump_suit else VALUES
@@ -117,6 +117,7 @@ class Game:
     def __init__(self, players):
         self.players = players
         self.trump_suit = None
+        self.points = np.zeros((2, 9))
         self.biddings = []
         self.rounds = []
         self.initialize()
@@ -126,6 +127,9 @@ class Game:
         np.random.shuffle(cards)
         for k in range(4):
             self.players[k].cards = CardList(cards[8 * k: 8 * (k + 1)])
+            if len({Card(*"K❤"), Card(*"Q❤")} & set(self.players[k].cards)) == 2:
+                self.points[k % 2, -1] = 20
+
 
     def play_round(self, first_player_index):
         if self.trump_suit is None:
@@ -143,9 +147,13 @@ class Game:
             round_cards = self.play_round(first_player_index)
             highest_card = get_highest_card(round_cards, self.trump_suit)
             winner = round_cards.index(highest_card)
-            if verbose:
-                print("Round #{} - {}".format(k, str(round_cards)))
+            points = round_cards.count_points() + (10 if k == 8 else 0)
             first_player_index = (winner + first_player_index) % 4
+            self.points[first_player_index % 2, k - 1] = points
+            if verbose:
+                print("Round #{} - {}  ({} points)".format(k, str(round_cards), points))
+        if verbose:
+            print(self.points)
                 
 
 def get_highest_card(cards, trump_suit):

@@ -33,6 +33,7 @@ def test_card_points_suit_and_value():
     card = _deck.Card("10", "♦")
     np.testing.assert_equal(card.value, "10")
     np.testing.assert_equal(card.suit, "♦")
+    np.testing.assert_equal(card.get_points("❤"), 10)
 
 
 def test_game_initialization():
