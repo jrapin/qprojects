@@ -1,4 +1,6 @@
 #-*- coding: utf-8 -*
+import tempfile
+from pathlib import Path
 from unittest import TestCase
 import genty
 import numpy as np
@@ -83,4 +85,22 @@ def test_game():
     game.trump_suit = "❤"
     game.play_game(verbose=True)
     raise Exception
+
+
+def test_game_board_eq():
+        board1 = _deck.GameBoard([(1, C(*"9♦"))], [(1, 80, "♦")])
+        board2 = _deck.GameBoard([(1, C(*"9d"))], [(1, 80, "♦")])
+        board3 = _deck.GameBoard([(1, C(*"9h"))], [(1, 80, "♦")])
+        board1.assert_equal(board2)
+        np.testing.assert_raises(AssertionError, board1.assert_equal, board3)
+
+
+def test_board_dump_and_load():
+    cards = [_deck.Card(v, s) for v in _deck.VALUES for s in _deck.SUITS]
+    board1 = _deck.GameBoard([(k % 4, c) for k, c in enumerate(cards)], [(1, 80, "♦")])
+    with tempfile.TemporaryDirectory() as tmp:
+        filepath = Path(tmp) / "board_dump_and_load_test.json"
+        board1.dump(filepath)
+        board2 = _deck.GameBoard.load(str(filepath))
+    board1.assert_equal(board2)
 

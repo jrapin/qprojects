@@ -1,5 +1,7 @@
 #-*- coding: utf-8 -*
+from pathlib import Path
 import numpy as np
+import ujson as json
 
 
 class Suits:
@@ -10,6 +12,7 @@ class Suits:
 
 
 SUITS = (Suits.heart, Suits.diamonds, Suits.spades, Suits.clubs)
+_SUIT_CONVERTER = dict(zip("hdsc", SUITS))
 VALUES = ("7", "8", "9", "J", "Q", "K", "10", "A")
 TRUMP_ORDER = ("7", "8", "Q", "K", "10", "A", "9", "J")
 _POINTS = {"7": (0, 0),  # points provided as: (regular, trump)
@@ -25,6 +28,7 @@ _POINTS = {"7": (0, 0),  # points provided as: (regular, trump)
 class Card:
 
     def __init__(self, value, suit):
+        suit = _SUIT_CONVERTER.get(suit, suit)  # to be able to use h d s or c as suit
         self._value_suit = value + suit
         assert suit in SUITS, 'Unknown suit "{}"'.format(suit)
         assert value in _POINTS, 'Unknown value "{}"'.format(value)
@@ -111,15 +115,19 @@ class Round(CardList):
         return "".join(strings)
 
 
+def extract_last_round(played_cards):
+    start = (len(played_cards) // 4) * 4
+    return Round([x[1] for x in played_cards[start:])
+
+
 
 class Game:
     
     def __init__(self, players):
         self.players = players
         self.trump_suit = None
+        self.board = GameBoard()
         self.points = np.zeros((2, 9))
-        self.biddings = []
-        self.rounds = []
         self.initialize()
 
     def initialize(self):
@@ -134,11 +142,14 @@ class Game:
     def play_round(self, first_player_index):
         if self.trump_suit is None:
             raise RuntimeError("Trump suit should be specified")
-        round_cards = Round(first_player_index, self.trump_suit)
+        cards = []
         for k in range(4):
-            index = (first_player_index + k) % 4
-            selected = self.players[index].get_played_card(round_cards, self.trump_suit)
-            round_cards.append(selected)
+            player_ind = (first_player_index + k) % 4
+            selected = self.players[player_ind].get_played_card(cards, self.trump_suit)
+            cards.append(selected)
+            self.board.played_cards.append((player_ind, selected))
+        round_cards = Round(first_player_index, self.trump_suit)
+        round_cards.extend([x[1] for x in self.board.played_cards[-4:]])
         return round_cards
 
     def play_game(self, verbose=False):  # still buggy
@@ -154,7 +165,45 @@ class Game:
                 print("Round #{} - {}  ({} points)".format(k, str(round_cards), points))
         if verbose:
             print(self.points)
-                
+
+
+class GameBoard:
+    """Elements which are visible to all players.
+    """
+
+    def __init__(self, played_cards=None, biddings=None):
+        self.played_cards = [] if played_cards is None else played_cards
+        self.biddings = [] if biddings is None else biddings
+
+    def dump(self, filepath):
+        data = self._as_dict()
+        filepath = Path(filepath)
+        with filepath.open("w") as f:
+            json.dump(data, f)
+
+    def _as_dict(self):
+        data = {"played_cards": [(p, str(c)) for p, c in self.played_cards],
+                "biddings": self.biddings}
+        return data
+
+    @classmethod
+    def load(cls, filepath):
+        instance = cls()
+        filepath = Path(filepath)
+        with filepath.open("r") as f:
+            data = json.load(f)
+        played_cards = [(p, Card(c[:-1], c[-1])) for p, c in data["played_cards"]]
+        return cls(played_cards, [tuple(b) for b in data["biddings"]])
+
+    def __repr__(self):
+        return str(self._as_dict())
+
+    def assert_equal(self, other):
+        for name in ["biddings", "played_cards"]:
+            for k, (element1, element2) in enumerate(zip(getattr(self, name), getattr(other, name))):
+                if element1 != element2:
+                    raise AssertionError("Discrepency with element #{} of {}: {} Vs {}".format(k, name, element1, element2))
+
 
 def get_highest_card(cards, trump_suit):
     """Returns the highest card among a set of cards
