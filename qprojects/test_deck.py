@@ -1,6 +1,4 @@
 #-*- coding: utf-8 -*
-import tempfile
-from pathlib import Path
 from unittest import TestCase
 import genty
 import numpy as np
@@ -38,25 +36,33 @@ def test_card_points_suit_and_value():
     np.testing.assert_equal(card.get_points("❤"), 10)
 
 
-def test_game_initialization():
-    #np.random.seed(12)
-    game = _deck.Game([_deck.DefaultPlayer() for _ in range(4)])
-    # check no duplicate
-    playable = {c for p in game.players for c in p.cards}
-    assert len(playable) == 32
+def test_cardlist_wrong_suit():
+    np.testing.assert_raises(AssertionError, _deck.CardList, [], "x")
+
+
+def test_get_highest_round_card_empty():
+    cards = _deck.CardList([], "h")
+    np.testing.assert_equal(cards.get_highest_round_card(), None)
+
+
+def test_get_round_string_error():
+    cards = _deck.CardList([], "h")
+    np.testing.assert_raises(RuntimeError, cards.get_round_string)
+
     
 
 @genty.genty
-class GameTests(TestCase):
+class DeckTests(TestCase):
 
     @genty.genty_dataset(
         no_trump=("♣", "K♦"),
         first_trump=("♦", "9♦"),
         other_trump=("♠", "J♠"),
     )
-    def test_get_highest_card(self, trump_suit, expected):
+    def test_get_highest_round_card(self, trump_suit, expected):
         cards = [C(*"9♦"), C(*"K♦"), C(*"Q♠"), C(*"J♠"), C(*"A❤")]
-        highest_card = _deck.get_highest_card(cards, trump_suit)
+        cards = _deck.CardList(cards, trump_suit)
+        highest_card = cards.get_highest_round_card()
         np.testing.assert_equal(highest_card, C(*expected))
 
 
@@ -70,37 +76,23 @@ class GameTests(TestCase):
         no_card_with_high_trump=(True, ["8♣", "J❤"], ["7❤", "A❤"]),
         no_card_with_trump_lead=(True, ["8♣", "8❤", "9♣"], ["A❤", "K♦", "Q♠", "9♦", "J♠"]),
         no_card_no_trump=(False, ["8♣", "8❤"], ["K♦", "Q♠", "9♦", "J♠"]),
-        fist_no_trump=(False, [], ["K♦", "Q♠", "9♦", "J♠"]),
+        first_no_trump=(False, [], ["K♦", "Q♠", "9♦", "J♠"]),
     )
     def test_get_playable_cards(self, has_trump, round_cards, expected):
+        trump_suit =  "❤"
         expected = [C(*x) for x in expected]
-        round_cards = [C(*x) for x in round_cards]
+        round_cards = _deck.CardList([C(*x) for x in round_cards], trump_suit)
         hand_cards = [C(*"9♦"), C(*"K♦"), C(*"Q♠"), C(*"J♠")] + ([C(*"A❤"), C(*"7❤")] if has_trump else [])
-        playable = _deck.get_playable_cards(hand_cards, round_cards, "❤")
+        hand_cards = _deck.CardList(hand_cards, trump_suit)
+        playable = hand_cards.get_playable_cards(round_cards)
         _utils.assert_set_equal(playable, expected)
 
-
-def test_game():
-    game = _deck.Game([_deck.DefaultPlayer() for _ in range(4)])
-    game.trump_suit = "❤"
-    game.play_game(verbose=True)
-    raise Exception
-
-
-def test_game_board_eq():
-        board1 = _deck.GameBoard([(1, C(*"9♦"))], [(1, 80, "♦")])
-        board2 = _deck.GameBoard([(1, C(*"9d"))], [(1, 80, "♦")])
-        board3 = _deck.GameBoard([(1, C(*"9h"))], [(1, 80, "♦")])
-        board1.assert_equal(board2)
-        np.testing.assert_raises(AssertionError, board1.assert_equal, board3)
-
-
-def test_board_dump_and_load():
-    cards = [_deck.Card(v, s) for v in _deck.VALUES for s in _deck.SUITS]
-    board1 = _deck.GameBoard([(k % 4, c) for k, c in enumerate(cards)], [(1, 80, "♦")])
-    with tempfile.TemporaryDirectory() as tmp:
-        filepath = Path(tmp) / "board_dump_and_load_test.json"
-        board1.dump(filepath)
-        board2 = _deck.GameBoard.load(str(filepath))
-    board1.assert_equal(board2)
+    @genty.genty_dataset(
+        no_trump=(["Q♦", "K♠", "9♦", "J♠"], '[ Q♦  ]    K♠       9♦       J♠     '),
+        with_trump=(["Q♦", "K❤", "9♦", "J♠"], '  Q♦     [ K❤ *]    9♦       J♠     '),
+    )
+    def test_get_round_string(self, cards, expected):
+        trump_suit =  "❤"
+        cards = _deck.CardList([C(s[:-1], s[-1]) for s in cards], trump_suit)
+        np.testing.assert_equal(cards.get_round_string(), expected)
 
