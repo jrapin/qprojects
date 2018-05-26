@@ -1,3 +1,4 @@
+#-*- coding: utf-8 -*
 from pathlib import Path
 import ujson as json
 import numpy as np

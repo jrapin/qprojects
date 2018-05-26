@@ -1,3 +1,4 @@
+#-*- coding: utf-8 -*
 from unittest import TestCase
 import genty
 import numpy as np

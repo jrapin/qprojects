@@ -1,3 +1,4 @@
+#-*- coding: utf-8 -*
 
 def assert_set_equal(estimate, reference):
     """Asserts that both sets are equals, with comprehensive error message.

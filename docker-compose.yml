@@ -1,0 +1,10 @@
+version: "3"
+services:
+  qprojects:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/qprojects
+    shm_size: 500M
+
