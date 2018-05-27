@@ -1,4 +1,6 @@
 #-*- coding: utf-8 -*
+import itertools
+
 
 def assert_set_equal(estimate, reference):
     """Asserts that both sets are equals, with comprehensive error message.
@@ -16,3 +18,21 @@ def assert_set_equal(estimate, reference):
     messages = ["  - {} element(s): {}.".format(name, s) for (name, s) in elements if s]
     if messages:
         raise AssertionError("\n".join(["Sets are not equal:"] + messages))
+
+
+def grouper(iterable, n, fillvalue=None):
+    """Collect data into fixed-length chunks or blocks
+    
+    Parameters
+    ----------
+    iterable: iterable
+        an iterable to group by batches
+    n: int
+        the number of elements of each batch
+    fillvalue: object
+        the value for filling the last batch if the iterable length is not a multiple of n
+    """
+    # grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx
+    # this code is copied from itertools recipes
+    args = [iter(iterable)] * n
+    return itertools.zip_longest(fillvalue=fillvalue, *args)

@@ -7,6 +7,15 @@ from . import _deck
 from ._deck import Card as C
 
 
+
+def play_a_game(verbose=False):
+    game = _game.Game([_game.DefaultPlayer() for _ in range(4)])
+    game.board.biddings.append((0, 80, "❤"))
+    game.trump_suit = "❤"
+    game.play_game(verbose=verbose)
+    return game
+
+
 def test_game_initialization():
     #np.random.seed(12)
     game = _game.Game([_game.DefaultPlayer() for _ in range(4)])
@@ -15,11 +24,9 @@ def test_game_initialization():
     assert len(playable) == 32
 
 
-def test_game():
-    game = _game.Game([_game.DefaultPlayer() for _ in range(4)])
-    game.trump_suit = "❤"
-    game.play_game(verbose=True)
-    raise Exception
+def test_random_game():
+    play_a_game(verbose=True)
+    # raise Exception
 
 
 def test_game_board_eq():
@@ -38,4 +45,13 @@ def test_board_dump_and_load():
         board1.dump(filepath)
         board2 = _game.GameBoard.load(str(filepath))
     board1.assert_equal(board2)
+
+
+def test_game_board():
+    filepath = Path(__file__).parent / "board_example.json"
+    if True: #not filepath.exists():
+        game = play_a_game()
+        game.board.dump(filepath)
+    board = _game.GameBoard.load(filepath)
+    board.assert_valid()
 

@@ -1,8 +1,11 @@
 #-*- coding: utf-8 -*
 from pathlib import Path
+import itertools
+import operator
 import ujson as json
 import numpy as np
 from . import _deck
+from . import _utils
 
 
 class DefaultPlayer:
@@ -82,6 +85,7 @@ class Game:
             first_player_index = next_player_index
         if verbose:
             print(self.points)
+        self.board.played_cards.append((first_player_index, None))
 
 
 class GameBoard:
@@ -99,16 +103,16 @@ class GameBoard:
         self.played_cards = [] if played_cards is None else played_cards
         self.biddings = [] if biddings is None else biddings
 
+    def _as_dict(self, with_letter=False):
+        data = {"played_cards": [(p, str(c)) for p, c in self.played_cards],
+                "biddings": self.biddings}
+        return data
+
     def dump(self, filepath):
         data = self._as_dict()
         filepath = Path(filepath)
         with filepath.open("w") as f:
             json.dump(data, f)
-
-    def _as_dict(self):
-        data = {"played_cards": [(p, str(c)) for p, c in self.played_cards],
-                "biddings": self.biddings}
-        return data
 
     @classmethod
     def load(cls, filepath):
@@ -116,8 +120,12 @@ class GameBoard:
         filepath = Path(filepath)
         with filepath.open("r") as f:
             data = json.load(f)
-        played_cards = [(p, _deck.Card(c[:-1], c[-1])) for p, c in data["played_cards"]]
+        played_cards = [(p, _deck.Card(c[:-1], c[-1]) if c != 'None' else None) for p, c in data["played_cards"]]
         return cls(played_cards, [tuple(b) for b in data["biddings"]])
+
+    @property
+    def trump_suit(self):
+        return self.biddings[-1][-1]
 
     def __repr__(self):
         return str(self._as_dict())
@@ -127,6 +135,35 @@ class GameBoard:
             for k, (element1, element2) in enumerate(zip(getattr(self, name), getattr(other, name))):
                 if element1 != element2:
                     raise AssertionError("Discrepency with element #{} of {}: {} Vs {}".format(k, name, element1, element2))
+
+    @property
+    def is_complete(self):
+        return len(self.played_cards) == 33  # 32 played and the additional 33rd element to record last winner
+
+    def assert_valid(self):
+        assert self.is_complete, "Game is not complete"
+        assert len({x[1] for x in self.played_cards[:32]}) == 32, "Some cards are repeated"
+        player_cards = [[] for _ in range(4)]
+        for p_card in self.played_cards[:32]:
+            player_cards[p_card[0]].append(p_card[1])            
+        player_cards = [_deck.CardList(c, self.trump_suit) for c in player_cards]
+        # check the sequence
+        first_player = 0
+        for k, round_cards in enumerate(_utils.grouper(self.played_cards[:32], 4)):
+            # player order
+            expected_players = (first_player + np.arange(4)) % 4
+            players = [rc[0] for rc in round_cards]
+            np.testing.assert_array_equal(players, expected_players, "Wrong players for round #{}".format(k))
+            round_cards_list = _deck.CardList([x[1] for x in round_cards], self.trump_suit)
+            first_player = (first_player + round_cards_list.index(round_cards_list.get_highest_round_card())) % 4            
+            # cards played
+            for k, player_card in enumerate(round_cards):
+                visible_round = _deck.CardList(round_cards_list[:k], self.trump_suit)
+                assert player_card[1] in player_cards[player_card[0]].get_playable_cards(visible_round), "Unauthorised card played"
+                player_cards[player_card[0]].remove(player_card[1])
+        assert first_player == self.played_cards[-1][0], "Wrong winner of last round"
+        assert not any(x for x in player_cards), "Remaining cards, this function is improperly coded"
+
 
 
 def extract_last_round(played_cards):
