@@ -13,6 +13,7 @@ def test_card_equality():
     card3 = _deck.Card(*"Q♦")
     assert card1 == card2
     assert card1 == "K♦"
+    assert card1 != None
     card3 = _deck.Card(*"Q♦")
     np.testing.assert_raises(NotImplementedError, card1.__eq__, 3)
 
@@ -49,7 +50,6 @@ def test_get_round_string_error():
     cards = _deck.CardList([], "h")
     np.testing.assert_raises(RuntimeError, cards.get_round_string)
 
-    
 
 @genty.genty
 class DeckTests(TestCase):
@@ -95,4 +95,22 @@ class DeckTests(TestCase):
         trump_suit =  "❤"
         cards = _deck.CardList([C(s[:-1], s[-1]) for s in cards], trump_suit)
         np.testing.assert_equal(cards.get_round_string(), expected)
+
+    @genty.genty_dataset(
+        same=("♣", ["8♣", "A❤"], None),
+        other_card=("♣", ["8♣", "Q❤"], AssertionError),
+        other_trump=("❤", ["8♣", "A❤"], AssertionError),
+        longer=("♣", ["8♣", "A❤", "Q❤"], AssertionError),
+        shorter=("♣", ["8♣"], AssertionError),
+    )
+    def test_card_list_assert_equal(self, other_trump, other_cards, expected):
+        round_cards = ["8♣", "A❤"]
+        round_cards = _deck.CardList([C(x[:-1], x[-1]) for x in round_cards], "♣")
+        other = _deck.CardList([C(x[:-1], x[-1]) for x in other_cards], other_trump)
+        if expected is None:
+            round_cards.assert_equal(other)
+        else:
+            np.testing.assert_raises(expected, round_cards.assert_equal, other)
+            
+        
 

@@ -58,8 +58,15 @@ def test_game_board():
     board.assert_valid()
 
 
+
+
+
 @genty.genty
 class GameTests(TestCase):
+
+    played_cards = [(0, '10❤'), (1, '9❤'), (2, '7❤'), (3, 'J❤'), (3, 'K♦'), (0, 'Q♦'), (1, '8♦'), (2, '7♦'), (3, '8♣'), (0, '7♣'), (1, '10♦'),
+                    (2, 'J♣'), (2, 'A♣'), (3, 'K♣'), (0, '10♣'), (1, '8❤'), (1, 'A♠'), (2, '9♠'), (3, 'K♠'), (0, 'J♠'), (1, 'Q♠'), (2, '10♠'),
+                    (3, '7♠'), (0, 'K❤'), (0, 'A❤'), (1, '8♠'), (2, 'Q♣'), (3, 'Q❤'), (0, '9♣'), (1, 'A♦'), (2, '9♦'), (3, 'J♦'), (0, 'None')]
 
     @genty.genty_dataset(
         correct=("❤", "", []),
@@ -68,9 +75,7 @@ class GameTests(TestCase):
         duplicate=("❤", "Some cards are repeated", [(4, (3, 'J❤'))]),
     )
     def test_gameboard_assert_valid(self, trump_suit, expected, changes):
-        played_cards = [(0, '10❤'), (1, '9❤'), (2, '7❤'), (3, 'J❤'), (3, 'K♦'), (0, 'Q♦'), (1, '8♦'), (2, '7♦'), (3, '8♣'), (0, '7♣'), (1, '10♦'),
-                        (2, 'J♣'), (2, 'A♣'), (3, 'K♣'), (0, '10♣'), (1, '8❤'), (1, 'A♠'), (2, '9♠'), (3, 'K♠'), (0, 'J♠'), (1, 'Q♠'), (2, '10♠'),
-                        (3, '7♠'), (0, 'K❤'), (0, 'A❤'), (1, '8♠'), (2, 'Q♣'), (3, 'Q❤'), (0, '9♣'), (1, 'A♦'), (2, '9♦'), (3, 'J♦'), (0, 'None')]
+        played_cards = list(self.played_cards)  # duplicate the list
         for index, value in changes:
             played_cards[index] = value
         board = _game.GameBoard()
@@ -85,5 +90,24 @@ class GameTests(TestCase):
                 assert expected in error.args[0], 'Incorrect message "{}"\nExpected "{}"'.format(error.args[0], expected)
             else:
                 raise AssertionError("An error should have been raised")
+
+    @genty.genty_dataset(
+        first_of_first=(0, []),
+        first_of_second=(4, []),
+        first_of_finished=(-1, []),
+        first_of_finished_2=(32, []),
+        second_of_second=(5, ["K♦"]),
+    )
+    def test_get_last_round(self, index, expected):
+        board = _game.GameBoard()
+        board.biddings.append((0, 80, "❤"))
+        expected = _deck.CardList([C(c[:-1], c[-1]) for c in expected], "❤")
+        played_cards = [(p, C(c[:-1], c[-1])) for p, c in self.played_cards[:32]] + [(0, None)]
+        board.played_cards = played_cards[:index]
+        output = board.get_current_round_cards()
+        output.assert_equal(expected)
+
+
+            
 
                 

@@ -1,4 +1,5 @@
 #-*- coding: utf-8 -*
+import itertools
 import numpy as np
 
 
@@ -85,6 +86,8 @@ class Card:
             return self._value_suit == other
         elif isinstance(other, self.__class__):
             return self._value_suit == other._value_suit
+        elif other is None:
+            return False
         else:
             raise NotImplementedError
 
@@ -183,3 +186,11 @@ class CardList(list):
             playable.extend([c for suit, cards in hand_cards_dict.items() for c in cards if suit != self.trump_suit])
         return CardList(playable, self.trump_suit)
 
+    def assert_equal(self, other):
+        """Asserts that two card lists are equal, with comprehensive error message.
+        This function should be used for testing.
+        """
+        assert self.trump_suit == other.trump_suit, "Trump suits are different: {} and {}".format(self.trump_suit, other.trump_suit)
+        for k, (card1, card2) in enumerate(itertools.zip_longest(self, other)):
+            np.testing.assert_equal(card1, card2, err_msg="CardLists {} and {} are different.\n"
+                                    "Wrong value for element #{}.".format(self, other, k))

@@ -71,7 +71,7 @@ class Game:
             self.board.played_cards.append((player_ind, selected))
         return round_cards
 
-    def play_game(self, verbose=False):  # still buggy
+    def play_game(self, verbose=False):
         first_player_index = 0
         for k in range(1, 9):
             round_cards = self.play_round(first_player_index)
@@ -195,9 +195,9 @@ class GameBoard:
         assert first_player == self.played_cards[-1][0], "Wrong winner of last round"
         assert not any(x for x in cards_by_player), "Remaining cards, this function is improperly coded"
 
-    def get_last_round():
-        """Return the last round of cards
+    def get_current_round_cards(self):
+        """Return the cards for the current round
         """
-        start = (len(played_cards) // 4) * 4
-        return CardList([x[1] for x in played_cards[start: start + 4]])
+        start = (len(self.played_cards) // 4) * 4
+        return _deck.CardList([x[1] for x in self.played_cards[start: min(32, start + 4)]], self.trump_suit)
 
