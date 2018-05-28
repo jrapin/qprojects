@@ -1,6 +1,8 @@
 #-*- coding: utf-8 -*
-import tempfile
+from unittest import TestCase
 from pathlib import Path
+import tempfile
+import genty
 import numpy as np
 from . import _game
 from . import _deck
@@ -55,3 +57,33 @@ def test_game_board():
     board = _game.GameBoard.load(filepath)
     board.assert_valid()
 
+
+@genty.genty
+class GameTests(TestCase):
+
+    @genty.genty_dataset(
+        correct=("❤", "", []),
+        incorrect_trump=("♦", "Wrong player for round #1", []),
+        unauthorized=("❤", "Unauthorized card K♦ played by player 3", [(3, (3, 'K♦')), (4, (3, 'J❤'))]),
+        duplicate=("❤", "Some cards are repeated", [(4, (3, 'J❤'))]),
+    )
+    def test_gameboard_assert_valid(self, trump_suit, expected, changes):
+        played_cards = [(0, '10❤'), (1, '9❤'), (2, '7❤'), (3, 'J❤'), (3, 'K♦'), (0, 'Q♦'), (1, '8♦'), (2, '7♦'), (3, '8♣'), (0, '7♣'), (1, '10♦'),
+                        (2, 'J♣'), (2, 'A♣'), (3, 'K♣'), (0, '10♣'), (1, '8❤'), (1, 'A♠'), (2, '9♠'), (3, 'K♠'), (0, 'J♠'), (1, 'Q♠'), (2, '10♠'),
+                        (3, '7♠'), (0, 'K❤'), (0, 'A❤'), (1, '8♠'), (2, 'Q♣'), (3, 'Q❤'), (0, '9♣'), (1, 'A♦'), (2, '9♦'), (3, 'J♦'), (0, 'None')]
+        for index, value in changes:
+            played_cards[index] = value
+        board = _game.GameBoard()
+        board.played_cards = [(p, C(c[:-1], c[-1])) for p, c in played_cards[:32]] + [(0, None)]
+        board.biddings.append((0, 80, trump_suit))
+        if not expected:
+            board.assert_valid()
+        else:
+            try:
+                board.assert_valid()
+            except AssertionError as error:
+                assert expected in error.args[0], 'Incorrect message "{}"\nExpected "{}"'.format(error.args[0], expected)
+            else:
+                raise AssertionError("An error should have been raised")
+
+                

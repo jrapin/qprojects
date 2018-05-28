@@ -26,7 +26,7 @@ class DefaultPlayer:
         assert len(cards) == 8
         self._cards = cards
 
-    def get_played_card(self, round_cards):
+    def get_card_to_play(self, round_cards):
         playable = self._cards.get_playable_cards(round_cards)
         selected = np.random.choice(playable)
         self._cards.remove(selected)
@@ -66,7 +66,7 @@ class Game:
         round_cards = _deck.CardList([], self.trump_suit)
         for k in range(4):
             player_ind = (first_player_index + k) % 4
-            selected = self.players[player_ind].get_played_card(round_cards)
+            selected = self.players[player_ind].get_card_to_play(round_cards)
             round_cards.append(selected)
             self.board.played_cards.append((player_ind, selected))
         return round_cards
@@ -109,6 +109,13 @@ class GameBoard:
         return data
 
     def dump(self, filepath):
+        """Dumps a GameBoard to a file
+
+        Parameter
+        ---------
+        filepath: str or Path
+            path to the file where to save the GameBoard.
+        """
         data = self._as_dict()
         filepath = Path(filepath)
         with filepath.open("w") as f:
@@ -116,6 +123,18 @@ class GameBoard:
 
     @classmethod
     def load(cls, filepath):
+        """Loads a GameBoard from a file
+
+        Parameter
+        ---------
+        filepath: str or Path
+            path to the file where the GameBoard is save.
+
+        Returns
+        -------
+        GameBoard
+            the loaded GameBoard
+        """
         instance = cls()
         filepath = Path(filepath)
         with filepath.open("r") as f:
@@ -125,12 +144,16 @@ class GameBoard:
 
     @property
     def trump_suit(self):
+        """Selected trump suit for the game
+        """
         return self.biddings[-1][-1]
 
     def __repr__(self):
         return str(self._as_dict())
 
     def assert_equal(self, other):
+        """Asserts that the board is identical to the provided other board.
+        """
         for name in ["biddings", "played_cards"]:
             for k, (element1, element2) in enumerate(zip(getattr(self, name), getattr(other, name))):
                 if element1 != element2:
@@ -138,35 +161,43 @@ class GameBoard:
 
     @property
     def is_complete(self):
+        """Returns whether the game is complete
+        The game is considered complete when all 32 cards are played and the 33rd element provides
+        the winner of the last round.
+        """
         return len(self.played_cards) == 33  # 32 played and the additional 33rd element to record last winner
 
     def assert_valid(self):
+        """Asserts that the whole sequence is complete and corresponds to a valid game.
+        """
         assert self.is_complete, "Game is not complete"
         assert len({x[1] for x in self.played_cards[:32]}) == 32, "Some cards are repeated"
-        player_cards = [[] for _ in range(4)]
+        cards_by_player = [[] for _ in range(4)]
         for p_card in self.played_cards[:32]:
-            player_cards[p_card[0]].append(p_card[1])            
-        player_cards = [_deck.CardList(c, self.trump_suit) for c in player_cards]
+            cards_by_player[p_card[0]].append(p_card[1])            
+        cards_by_player = [_deck.CardList(c, self.trump_suit) for c in cards_by_player]
         # check the sequence
         first_player = 0
-        for k, round_cards in enumerate(_utils.grouper(self.played_cards[:32], 4)):
+        for k, round_played_cards in enumerate(_utils.grouper(self.played_cards[:32], 4)):
             # player order
             expected_players = (first_player + np.arange(4)) % 4
-            players = [rc[0] for rc in round_cards]
-            np.testing.assert_array_equal(players, expected_players, "Wrong players for round #{}".format(k))
-            round_cards_list = _deck.CardList([x[1] for x in round_cards], self.trump_suit)
+            players = [rc[0] for rc in round_played_cards]
+            np.testing.assert_array_equal(players, expected_players, "Wrong player for round #{}".format(k))
+            round_cards_list = _deck.CardList([x[1] for x in round_played_cards], self.trump_suit)
             first_player = (first_player + round_cards_list.index(round_cards_list.get_highest_round_card())) % 4            
             # cards played
-            for k, player_card in enumerate(round_cards):
+            for k, (player, card) in enumerate(round_played_cards):
                 visible_round = _deck.CardList(round_cards_list[:k], self.trump_suit)
-                assert player_card[1] in player_cards[player_card[0]].get_playable_cards(visible_round), "Unauthorised card played"
-                player_cards[player_card[0]].remove(player_card[1])
+                error_msg = "Unauthorized card {} played by player {}".format(card, player)
+                assert card in cards_by_player[player].get_playable_cards(visible_round), error_msg
+                cards_by_player[player].remove(card)
+        # last winner and function check
         assert first_player == self.played_cards[-1][0], "Wrong winner of last round"
-        assert not any(x for x in player_cards), "Remaining cards, this function is improperly coded"
+        assert not any(x for x in cards_by_player), "Remaining cards, this function is improperly coded"
 
-
-
-def extract_last_round(played_cards):
-    start = (len(played_cards) // 4) * 4
-    return Round([x[1] for x in played_cards[start:]])
+    def get_last_round():
+        """Return the last round of cards
+        """
+        start = (len(played_cards) // 4) * 4
+        return CardList([x[1] for x in played_cards[start: start + 4]])
 
