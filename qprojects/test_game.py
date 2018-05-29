@@ -1,4 +1,4 @@
-#-*- coding: utf-8 -*
+# -*- coding: utf-8 -*
 from unittest import TestCase
 from pathlib import Path
 import tempfile
@@ -7,7 +7,6 @@ import numpy as np
 from . import _game
 from . import _deck
 from ._deck import Card as C
-
 
 
 def play_a_game(verbose=False):
@@ -19,7 +18,7 @@ def play_a_game(verbose=False):
 
 
 def test_game_initialization():
-    #np.random.seed(12)
+    # np.random.seed(12)
     game = _game.Game([_game.DefaultPlayer() for _ in range(4)])
     # check no duplicate
     playable = {c for p in game.players for c in p.cards}
@@ -51,22 +50,20 @@ def test_board_dump_and_load():
 
 def test_game_board():
     filepath = Path(__file__).parent / "board_example.json"
-    if True: #not filepath.exists():
+    if not filepath.exists():  # TODO: commit it
         game = play_a_game()
         game.board.dump(filepath)
     board = _game.GameBoard.load(filepath)
     board.assert_valid()
 
 
-
-
-
 @genty.genty
 class GameTests(TestCase):
 
-    played_cards = [(0, '10❤'), (1, '9❤'), (2, '7❤'), (3, 'J❤'), (3, 'K♦'), (0, 'Q♦'), (1, '8♦'), (2, '7♦'), (3, '8♣'), (0, '7♣'), (1, '10♦'),
-                    (2, 'J♣'), (2, 'A♣'), (3, 'K♣'), (0, '10♣'), (1, '8❤'), (1, 'A♠'), (2, '9♠'), (3, 'K♠'), (0, 'J♠'), (1, 'Q♠'), (2, '10♠'),
-                    (3, '7♠'), (0, 'K❤'), (0, 'A❤'), (1, '8♠'), (2, 'Q♣'), (3, 'Q❤'), (0, '9♣'), (1, 'A♦'), (2, '9♦'), (3, 'J♦'), (0, 'None')]
+    played_cards = [(0, '10❤'), (1, '9❤'), (2, '7❤'), (3, 'J❤'), (3, 'K♦'), (0, 'Q♦'), (1, '8♦'), (2, '7♦'), (3, '8♣'),
+                    (0, '7♣'), (1, '10♦'), (2, 'J♣'), (2, 'A♣'), (3, 'K♣'), (0, '10♣'), (1, '8❤'), (1, 'A♠'), (2, '9♠'),
+                    (3, 'K♠'), (0, 'J♠'), (1, 'Q♠'), (2, '10♠'), (3, '7♠'), (0, 'K❤'), (0, 'A❤'), (1, '8♠'), (2, 'Q♣'),
+                    (3, 'Q❤'), (0, '9♣'), (1, 'A♦'), (2, '9♦'), (3, 'J♦'), (0, 'None')]
 
     @genty.genty_dataset(
         correct=("❤", "", []),
@@ -107,8 +104,3 @@ class GameTests(TestCase):
         board.played_cards = played_cards[:index]
         output = board.get_current_round_cards()
         output.assert_equal(expected)
-
-
-            
-
-                

@@ -1,7 +1,5 @@
-#-*- coding: utf-8 -*
+# -*- coding: utf-8 -*
 from pathlib import Path
-import itertools
-import operator
 import ujson as json
 import numpy as np
 from . import _deck
@@ -28,14 +26,14 @@ class DefaultPlayer:
 
     def get_card_to_play(self, board):
         round_cards = board.get_current_round_cards()
-        playable = self._cards.get_playable_cards([] if len(round_cards) ==  4 else round_cards)
+        playable = self._cards.get_playable_cards([] if len(round_cards) == 4 else round_cards)
         selected = np.random.choice(playable)
         self._cards.remove(selected)
         return selected
 
 
 class Game:
-    
+
     def __init__(self, players):
         self.players = players
         self._trump_suit = None
@@ -103,7 +101,7 @@ class GameBoard:
         self.played_cards = [] if played_cards is None else played_cards
         self.biddings = [] if biddings is None else biddings
 
-    def _as_dict(self, with_letter=False):
+    def _as_dict(self):
         data = {"played_cards": [(p, str(c)) for p, c in self.played_cards],
                 "biddings": self.biddings}
         return data
@@ -135,7 +133,6 @@ class GameBoard:
         GameBoard
             the loaded GameBoard
         """
-        instance = cls()
         filepath = Path(filepath)
         with filepath.open("r") as f:
             data = json.load(f)
@@ -174,7 +171,7 @@ class GameBoard:
         assert len({x[1] for x in self.played_cards[:32]}) == 32, "Some cards are repeated"
         cards_by_player = [[] for _ in range(4)]
         for p_card in self.played_cards[:32]:
-            cards_by_player[p_card[0]].append(p_card[1])            
+            cards_by_player[p_card[0]].append(p_card[1])
         cards_by_player = [_deck.CardList(c, self.trump_suit) for c in cards_by_player]
         # check the sequence
         first_player = 0
@@ -184,10 +181,10 @@ class GameBoard:
             players = [rc[0] for rc in round_played_cards]
             np.testing.assert_array_equal(players, expected_players, "Wrong player for round #{}".format(k))
             round_cards_list = _deck.CardList([x[1] for x in round_played_cards], self.trump_suit)
-            first_player = (first_player + round_cards_list.index(round_cards_list.get_highest_round_card())) % 4            
+            first_player = (first_player + round_cards_list.index(round_cards_list.get_highest_round_card())) % 4
             # cards played
-            for k, (player, card) in enumerate(round_played_cards):
-                visible_round = _deck.CardList(round_cards_list[:k], self.trump_suit)
+            for i, (player, card) in enumerate(round_played_cards):
+                visible_round = _deck.CardList(round_cards_list[:i], self.trump_suit)
                 error_msg = "Unauthorized card {} played by player {}".format(card, player)
                 assert card in cards_by_player[player].get_playable_cards(visible_round), error_msg
                 cards_by_player[player].remove(card)
@@ -201,4 +198,3 @@ class GameBoard:
         end = min(len(self.played_cards), 32)
         start = max(0, ((end - 1) // 4)) * 4
         return _deck.CardList([x[1] for x in self.played_cards[start: end]], self.trump_suit)
-

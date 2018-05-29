@@ -1,4 +1,4 @@
-#-*- coding: utf-8 -*
+# -*- coding: utf-8 -*
 from unittest import TestCase
 import genty
 import numpy as np
@@ -10,12 +10,11 @@ from ._deck import Card as C
 def test_card_equality():
     card1 = _deck.Card(*"K♦")
     card2 = _deck.Card(*"K♦")
-    card3 = _deck.Card(*"Q♦")
     assert card1 == card2
     assert card1 == "K♦"
-    assert card1 != None
+    assert card1 != None  # pylint: disable=singleton-comparison
     assert card1 != 3
-    card3 = _deck.Card(*"Q♦")
+    _ = _deck.Card(*"Q♦")
 
 
 def test_card_hash():
@@ -65,7 +64,6 @@ class DeckTests(TestCase):
         highest_card = cards.get_highest_round_card()
         np.testing.assert_equal(highest_card, C(*expected))
 
-
     @genty.genty_dataset(
         same_suit=(True, ["8♦", "Q♦"], ["9♦", "K♦"]),
         same_suit_trump_by_partner=(True, ["8❤", "Q♦"], ["A❤"]),
@@ -79,7 +77,7 @@ class DeckTests(TestCase):
         first_no_trump=(False, [], ["K♦", "Q♠", "9♦", "J♠"]),
     )
     def test_get_playable_cards(self, has_trump, round_cards, expected):
-        trump_suit =  "❤"
+        trump_suit = "❤"
         expected = [C(*x) for x in expected]
         round_cards = _deck.CardList([C(*x) for x in round_cards], trump_suit)
         hand_cards = [C(*"9♦"), C(*"K♦"), C(*"Q♠"), C(*"J♠")] + ([C(*"A❤"), C(*"7❤")] if has_trump else [])
@@ -92,7 +90,7 @@ class DeckTests(TestCase):
         with_trump=(["Q♦", "K❤", "9♦", "J♠"], '  Q♦     [ K❤ *]    9♦       J♠     '),
     )
     def test_get_round_string(self, cards, expected):
-        trump_suit =  "❤"
+        trump_suit = "❤"
         cards = _deck.CardList([C(s[:-1], s[-1]) for s in cards], trump_suit)
         np.testing.assert_equal(cards.get_round_string(), expected)
 
@@ -111,6 +109,3 @@ class DeckTests(TestCase):
             round_cards.assert_equal(other)
         else:
             np.testing.assert_raises(expected, round_cards.assert_equal, other)
-            
-        
-

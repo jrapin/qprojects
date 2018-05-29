@@ -1,4 +1,4 @@
-#-*- coding: utf-8 -*
+# -*- coding: utf-8 -*
 from unittest import TestCase
 import genty
 import numpy as np
@@ -33,7 +33,3 @@ class UtilsTests(TestCase):
     def test_grouper(self, iterator, n, fillvalue, expected):
         output = list(_utils.grouper(iterator, n, fillvalue))
         np.testing.assert_array_equal(output, expected)
-
-
-    
-

@@ -1,4 +1,4 @@
-#-*- coding: utf-8 -*
+# -*- coding: utf-8 -*
 import itertools
 
 
@@ -22,7 +22,7 @@ def assert_set_equal(estimate, reference):
 
 def grouper(iterable, n, fillvalue=None):
     """Collect data into fixed-length chunks or blocks
-    
+
     Parameters
     ----------
     iterable: iterable

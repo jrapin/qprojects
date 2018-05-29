@@ -1,4 +1,4 @@
-#-*- coding: utf-8 -*
+# -*- coding: utf-8 -*
 import itertools
 import numpy as np
 
@@ -28,7 +28,7 @@ class Card:
 
     def __init__(self, value, suit):
         """Card of a deck
-        
+
         Parameters
         ----------
         value: str
@@ -71,9 +71,8 @@ class Card:
         trump_suit: str
             the trump suit selected for the game
         """
-        l = TRUMP_ORDER if self.suit == trump_suit else VALUES
-        return (TRUMP_ORDER if self.suit == trump_suit else VALUES).index(self.value)  # to be tested
-        
+        values = TRUMP_ORDER if self.suit == trump_suit else VALUES
+        return values.index(self.value)  # to be tested
 
     def __hash__(self):
         return self._value_suit.__hash__()
@@ -86,8 +85,7 @@ class Card:
             return self._value_suit == other
         elif isinstance(other, self.__class__):
             return self._value_suit == other._value_suit
-        else:
-            return NotImplemented
+        return NotImplemented
 
 
 class CardList(list):
@@ -118,7 +116,7 @@ class CardList(list):
         """Returns a string representing a round.
         This only work with 4-length CardList
         Brackets are used to show the highest card. Stars are used to highlight the trump cards.
-        
+
         Example
         -------
         Round with heart trump:  '  Q♦     [ K❤ *]    9♦       J♠     '
