@@ -86,10 +86,8 @@ class Card:
             return self._value_suit == other
         elif isinstance(other, self.__class__):
             return self._value_suit == other._value_suit
-        elif other is None:
-            return False
         else:
-            raise NotImplementedError
+            return NotImplemented
 
 
 class CardList(list):

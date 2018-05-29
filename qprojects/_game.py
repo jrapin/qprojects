@@ -26,8 +26,9 @@ class DefaultPlayer:
         assert len(cards) == 8
         self._cards = cards
 
-    def get_card_to_play(self, round_cards):
-        playable = self._cards.get_playable_cards(round_cards)
+    def get_card_to_play(self, board):
+        round_cards = board.get_current_round_cards()
+        playable = self._cards.get_playable_cards([] if len(round_cards) ==  4 else round_cards)
         selected = np.random.choice(playable)
         self._cards.remove(selected)
         return selected
@@ -63,18 +64,17 @@ class Game:
     def play_round(self, first_player_index):
         if self.trump_suit is None:
             raise RuntimeError("Trump suit should be specified")
-        round_cards = _deck.CardList([], self.trump_suit)
         for k in range(4):
             player_ind = (first_player_index + k) % 4
-            selected = self.players[player_ind].get_card_to_play(round_cards)
-            round_cards.append(selected)
+            selected = self.players[player_ind].get_card_to_play(self.board)
             self.board.played_cards.append((player_ind, selected))
-        return round_cards
 
     def play_game(self, verbose=False):
         first_player_index = 0
         for k in range(1, 9):
-            round_cards = self.play_round(first_player_index)
+            self.play_round(first_player_index)
+            round_cards = self.board.get_current_round_cards()
+            assert len(round_cards) == 4
             highest_card = round_cards.get_highest_round_card()
             winner = round_cards.index(highest_card)
             points = round_cards.count_points() + (10 if k == 8 else 0)
@@ -196,8 +196,9 @@ class GameBoard:
         assert not any(x for x in cards_by_player), "Remaining cards, this function is improperly coded"
 
     def get_current_round_cards(self):
-        """Return the cards for the current round
+        """Return the cards for the current round (or the round just played if all 4 cards have been played)
         """
-        start = (len(self.played_cards) // 4) * 4
-        return _deck.CardList([x[1] for x in self.played_cards[start: min(32, start + 4)]], self.trump_suit)
+        end = min(len(self.played_cards), 32)
+        start = max(0, ((end - 1) // 4)) * 4
+        return _deck.CardList([x[1] for x in self.played_cards[start: end]], self.trump_suit)
 

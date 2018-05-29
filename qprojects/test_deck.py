@@ -14,8 +14,8 @@ def test_card_equality():
     assert card1 == card2
     assert card1 == "K♦"
     assert card1 != None
+    assert card1 != 3
     card3 = _deck.Card(*"Q♦")
-    np.testing.assert_raises(NotImplementedError, card1.__eq__, 3)
 
 
 def test_card_hash():

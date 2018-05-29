@@ -93,14 +93,15 @@ class GameTests(TestCase):
 
     @genty.genty_dataset(
         first_of_first=(0, []),
-        first_of_second=(4, []),
-        first_of_finished=(-1, []),
-        first_of_finished_2=(32, []),
-        second_of_second=(5, ["K♦"]),
+        first_of_second=(4, [0, 1, 2, 3]),
+        first_of_finished=(-1, [28, 29, 30, 31]),
+        first_of_finished_2=(32, [28, 29, 30, 31]),
+        second_of_second=(5, [4]),
     )
-    def test_get_last_round(self, index, expected):
+    def test_get_last_round(self, index, expected_inds):
         board = _game.GameBoard()
         board.biddings.append((0, 80, "❤"))
+        expected = [self.played_cards[ind][1] for ind in expected_inds]
         expected = _deck.CardList([C(c[:-1], c[-1]) for c in expected], "❤")
         played_cards = [(p, C(c[:-1], c[-1])) for p, c in self.played_cards[:32]] + [(0, None)]
         board.played_cards = played_cards[:index]
