@@ -26,32 +26,37 @@ _POINTS = {"7": (0, 0),  # points provided as: (regular, trump)
 
 class Card:
 
-    def __init__(self, value, suit):
+    def __init__(self, tag):
         """Card of a deck
 
         Parameters
         ----------
-        value: str
-            The value of the card, among: "7", "8", "9", "J", "Q", "K", "10", "A"
-        suit: str
-            The suit of the card, among: "❤", "♦", "♠", "♣" (or for simplicity's sake: "h", "d", "s", "c")
+        tag: str
+            Concatenation of:
+                - a value, among: "7", "8", "9", "J", "Q", "K", "10", "A"
+                - a suit, among: "❤", "♦", "♠", "♣" (or for simplicity's sake: "h", "d", "s", "c")
         """
-        suit = _SUIT_CONVERTER.get(suit, suit)  # to be able to use h d s or c as suit
-        self._value_suit = value + suit
-        assert suit in SUITS, 'Unknown suit "{}"'.format(suit)
-        assert value in _POINTS, 'Unknown value "{}"'.format(value)
+        self._tag = tag
+        if tag[-1] in _SUIT_CONVERTER:  # to be able to use h d s or c as suit
+            self._tag = tag[:-1] + _SUIT_CONVERTER[tag[-1]]
+        assert self.value in _POINTS, 'Unknown value "{}".'.format(self.value)
+        assert self.suit in SUITS, 'Unknown suit "{}".'.format(self.suit)
+
+    @property
+    def tag(self):
+        return self._tag
 
     @property
     def value(self):
         """Value of the card
         """
-        return self._value_suit[:-1]
+        return self._tag[:-1]
 
     @property
     def suit(self):
         """Suit of the card
         """
-        return self._value_suit[-1]
+        return self._tag[-1]
 
     def get_points(self, trump_suit):
         """Number of points awarded by the card
@@ -61,7 +66,7 @@ class Card:
         trump_suit: str
             the trump suit selected for the game
         """
-        return _POINTS[self._value_suit[:-1]][self._value_suit[-1] == trump_suit]
+        return _POINTS[self.value][self.suit == trump_suit]
 
     def get_order(self, trump_suit):
         """Order of the card in the suit, considering the trump suit (trump suit order differs from others).
@@ -75,16 +80,16 @@ class Card:
         return values.index(self.value)  # to be tested
 
     def __hash__(self):
-        return self._value_suit.__hash__()
+        return self._tag.__hash__()
 
     def __repr__(self):
-        return self._value_suit
+        return 'Card("{}")'.format(self._tag)
 
     def __eq__(self, other):
         if isinstance(other, str):
-            return self._value_suit == other
+            return self._tag == other
         elif isinstance(other, self.__class__):
-            return self._value_suit == other._value_suit
+            return self._tag == other._tag
         return NotImplemented
 
 
@@ -133,7 +138,7 @@ class CardList(list):
         for card in self:
             h = card == highest
             params = ["[" if h else " ", "" if card.value == "10" else " ",
-                      card, " *" if card.suit == self.trump_suit else "  ", "]" if h else " "]
+                      card.tag, " *" if card.suit == self.trump_suit else "  ", "]" if h else " "]
             strings.append("{}{}{}{}{}  ".format(*params))
         return "".join(strings)
 

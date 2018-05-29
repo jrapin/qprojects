@@ -8,29 +8,29 @@ from ._deck import Card as C
 
 
 def test_card_equality():
-    card1 = _deck.Card(*"K♦")
-    card2 = _deck.Card(*"K♦")
+    card1 = _deck.Card("K♦")
+    card2 = _deck.Card("K♦")
     assert card1 == card2
     assert card1 == "K♦"
     assert card1 != None  # pylint: disable=singleton-comparison
     assert card1 != 3
-    _ = _deck.Card(*"Q♦")
+    _ = _deck.Card("Q♦")
 
 
 def test_card_hash():
-    card1 = _deck.Card(*"K♦")
-    card2 = _deck.Card(*"K♦")
-    card3 = _deck.Card(*"Q♦")
+    card1 = _deck.Card("K♦")
+    card2 = _deck.Card("K♦")
+    card3 = _deck.Card("Q♦")
     assert {card1, card2, card3} == {card1, card3}
 
 
 def test_card_points_suit_and_value():
-    card = _deck.Card(*"J♦")
+    card = _deck.Card("J♦")
     np.testing.assert_equal(card.get_points("♦"), 20)
     np.testing.assert_equal(card.get_points("❤"), 2)
     np.testing.assert_equal(card.suit, "♦")
     np.testing.assert_equal(card.value, "J")
-    card = _deck.Card("10", "♦")
+    card = _deck.Card("10d")
     np.testing.assert_equal(card.value, "10")
     np.testing.assert_equal(card.suit, "♦")
     np.testing.assert_equal(card.get_points("❤"), 10)
@@ -59,10 +59,10 @@ class DeckTests(TestCase):
         other_trump=("♠", "J♠"),
     )
     def test_get_highest_round_card(self, trump_suit, expected):
-        cards = [C(*"9♦"), C(*"K♦"), C(*"Q♠"), C(*"J♠"), C(*"A❤")]
+        cards = [C("9♦"), C("K♦"), C("Q♠"), C("J♠"), C("A❤")]
         cards = _deck.CardList(cards, trump_suit)
         highest_card = cards.get_highest_round_card()
-        np.testing.assert_equal(highest_card, C(*expected))
+        np.testing.assert_equal(highest_card, C(expected))
 
     @genty.genty_dataset(
         same_suit=(True, ["8♦", "Q♦"], ["9♦", "K♦"]),
@@ -78,9 +78,9 @@ class DeckTests(TestCase):
     )
     def test_get_playable_cards(self, has_trump, round_cards, expected):
         trump_suit = "❤"
-        expected = [C(*x) for x in expected]
-        round_cards = _deck.CardList([C(*x) for x in round_cards], trump_suit)
-        hand_cards = [C(*"9♦"), C(*"K♦"), C(*"Q♠"), C(*"J♠")] + ([C(*"A❤"), C(*"7❤")] if has_trump else [])
+        expected = [C(x) for x in expected]
+        round_cards = _deck.CardList([C(x) for x in round_cards], trump_suit)
+        hand_cards = [C("9♦"), C("K♦"), C("Q♠"), C("J♠")] + ([C("A❤"), C("7❤")] if has_trump else [])
         hand_cards = _deck.CardList(hand_cards, trump_suit)
         playable = hand_cards.get_playable_cards(round_cards)
         _utils.assert_set_equal(playable, expected)
@@ -91,7 +91,7 @@ class DeckTests(TestCase):
     )
     def test_get_round_string(self, cards, expected):
         trump_suit = "❤"
-        cards = _deck.CardList([C(s[:-1], s[-1]) for s in cards], trump_suit)
+        cards = _deck.CardList([C(s) for s in cards], trump_suit)
         np.testing.assert_equal(cards.get_round_string(), expected)
 
     @genty.genty_dataset(
@@ -103,8 +103,8 @@ class DeckTests(TestCase):
     )
     def test_card_list_assert_equal(self, other_trump, other_cards, expected):
         round_cards = ["8♣", "A❤"]
-        round_cards = _deck.CardList([C(x[:-1], x[-1]) for x in round_cards], "♣")
-        other = _deck.CardList([C(x[:-1], x[-1]) for x in other_cards], other_trump)
+        round_cards = _deck.CardList([C(x) for x in round_cards], "♣")
+        other = _deck.CardList([C(x) for x in other_cards], other_trump)
         if expected is None:
             round_cards.assert_equal(other)
         else:

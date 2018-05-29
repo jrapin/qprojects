@@ -31,15 +31,15 @@ def test_random_game():
 
 
 def test_game_board_eq():
-    board1 = _game.GameBoard([(1, C(*"9♦"))], [(1, 80, "♦")])
-    board2 = _game.GameBoard([(1, C(*"9d"))], [(1, 80, "♦")])
-    board3 = _game.GameBoard([(1, C(*"9h"))], [(1, 80, "♦")])
+    board1 = _game.GameBoard([(1, C("9♦"))], [(1, 80, "♦")])
+    board2 = _game.GameBoard([(1, C("9d"))], [(1, 80, "♦")])
+    board3 = _game.GameBoard([(1, C("9h"))], [(1, 80, "♦")])
     board1.assert_equal(board2)
     np.testing.assert_raises(AssertionError, board1.assert_equal, board3)
 
 
 def test_board_dump_and_load():
-    cards = [C(v, s) for v in _deck.VALUES for s in _deck.SUITS]
+    cards = [C(v + s) for v in _deck.VALUES for s in _deck.SUITS]
     board1 = _game.GameBoard([(k % 4, c) for k, c in enumerate(cards)], [(1, 80, "♦")])
     with tempfile.TemporaryDirectory() as tmp:
         filepath = Path(tmp) / "board_dump_and_load_test.json"
@@ -68,7 +68,7 @@ class GameTests(TestCase):
     @genty.genty_dataset(
         correct=("❤", "", []),
         incorrect_trump=("♦", "Wrong player for round #1", []),
-        unauthorized=("❤", "Unauthorized card K♦ played by player 3", [(3, (3, 'K♦')), (4, (3, 'J❤'))]),
+        unauthorized=("❤", 'Unauthorized Card("K♦") played by player 3', [(3, (3, 'K♦')), (4, (3, 'J❤'))]),
         duplicate=("❤", "Some cards are repeated", [(4, (3, 'J❤'))]),
     )
     def test_gameboard_assert_valid(self, trump_suit, expected, changes):
@@ -76,7 +76,7 @@ class GameTests(TestCase):
         for index, value in changes:
             played_cards[index] = value
         board = _game.GameBoard()
-        board.played_cards = [(p, C(c[:-1], c[-1])) for p, c in played_cards[:32]] + [(0, None)]
+        board.played_cards = [(p, C(c)) for p, c in played_cards[:32]] + [(0, None)]
         board.biddings.append((0, 80, trump_suit))
         if not expected:
             board.assert_valid()
@@ -99,8 +99,8 @@ class GameTests(TestCase):
         board = _game.GameBoard()
         board.biddings.append((0, 80, "❤"))
         expected = [self.played_cards[ind][1] for ind in expected_inds]
-        expected = _deck.CardList([C(c[:-1], c[-1]) for c in expected], "❤")
-        played_cards = [(p, C(c[:-1], c[-1])) for p, c in self.played_cards[:32]] + [(0, None)]
+        expected = _deck.CardList([C(c) for c in expected], "❤")
+        played_cards = [(p, C(c)) for p, c in self.played_cards[:32]] + [(0, None)]
         board.played_cards = played_cards[:index]
         output = board.get_current_round_cards()
         output.assert_equal(expected)

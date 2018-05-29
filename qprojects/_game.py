@@ -42,11 +42,11 @@ class Game:
         self.initialize()
 
     def initialize(self):
-        cards = [_deck.Card(v, s) for s in _deck.SUITS for v in _deck.VALUES]
+        cards = [_deck.Card(v + s) for s in _deck.SUITS for v in _deck.VALUES]
         np.random.shuffle(cards)
         for k in range(4):
             self.players[k].cards = _deck.CardList(cards[8 * k: 8 * (k + 1)])
-            if len({_deck.Card(*"K❤"), _deck.Card(*"Q❤")} & set(self.players[k].cards)) == 2:
+            if len({_deck.Card("K❤"), _deck.Card("Q❤")} & set(self.players[k].cards)) == 2:
                 self.points[k % 2, -1] = 20
 
     @property
@@ -102,7 +102,7 @@ class GameBoard:
         self.biddings = [] if biddings is None else biddings
 
     def _as_dict(self):
-        data = {"played_cards": [(p, str(c)) for p, c in self.played_cards],
+        data = {"played_cards": [(p, c.tag) for p, c in self.played_cards],
                 "biddings": self.biddings}
         return data
 
@@ -136,7 +136,7 @@ class GameBoard:
         filepath = Path(filepath)
         with filepath.open("r") as f:
             data = json.load(f)
-        played_cards = [(p, _deck.Card(c[:-1], c[-1]) if c != 'None' else None) for p, c in data["played_cards"]]
+        played_cards = [(p, _deck.Card(c) if c != 'None' else None) for p, c in data["played_cards"]]
         return cls(played_cards, [tuple(b) for b in data["biddings"]])
 
     @property
@@ -185,7 +185,7 @@ class GameBoard:
             # cards played
             for i, (player, card) in enumerate(round_played_cards):
                 visible_round = _deck.CardList(round_cards_list[:i], self.trump_suit)
-                error_msg = "Unauthorized card {} played by player {}".format(card, player)
+                error_msg = "Unauthorized {} played by player {}.".format(card, player)
                 assert card in cards_by_player[player].get_playable_cards(visible_round), error_msg
                 cards_by_player[player].remove(card)
         # last winner and function check
