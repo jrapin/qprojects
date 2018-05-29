@@ -64,7 +64,6 @@ class Game:
             player = self.board.next_player
             card = self.players[player].get_card_to_play(self.board)
             self.board.add_played_card(card, verbose=verbose)
-        self.board.played_cards.append((self.board.next_player, None))  # TODO: remove when becomes useless
 
 
 class GameBoard:
@@ -78,14 +77,15 @@ class GameBoard:
         the sequence of biddings, as a list of tuples of type (#player, points, trump_suit)
     """
 
-    def __init__(self, played_cards=None, biddings=None):
+    def __init__(self, played_cards=None, biddings=None, next_player=0):
         self.played_cards = [] if played_cards is None else played_cards
         self.biddings = [] if biddings is None else biddings
-        self.next_player = 0
+        self.next_player = next_player
 
     def _as_dict(self):
         data = {"played_cards": [(p, c.tag) for p, c in self.played_cards],
-                "biddings": self.biddings}
+                "biddings": self.biddings,
+                "next_player": self.next_player}
         return data
 
     def dump(self, filepath):
@@ -119,7 +119,7 @@ class GameBoard:
         with filepath.open("r") as f:
             data = json.load(f)
         played_cards = [(p, _deck.Card(c) if c != 'None' else None) for p, c in data["played_cards"]]
-        return cls(played_cards, [tuple(b) for b in data["biddings"]])
+        return cls(played_cards, [tuple(b) for b in data["biddings"]], data["next_player"])
 
     def add_played_card(self, card, verbose=False):
         self.played_cards.append((self.next_player, card))
@@ -158,20 +158,20 @@ class GameBoard:
         The game is considered complete when all 32 cards are played and the 33rd element provides
         the winner of the last round.
         """
-        return len(self.played_cards) == 33  # 32 played and the additional 33rd element to record last winner
+        return len(self.played_cards) == 32
 
     def assert_valid(self):
         """Asserts that the whole sequence is complete and corresponds to a valid game.
         """
         assert self.is_complete, "Game is not complete"
-        assert len({x[1] for x in self.played_cards[:32]}) == 32, "Some cards are repeated"
+        assert len({x[1] for x in self.played_cards}) == 32, "Some cards are repeated"
         cards_by_player = [[] for _ in range(4)]
-        for p_card in self.played_cards[:32]:
+        for p_card in self.played_cards:
             cards_by_player[p_card[0]].append(p_card[1])
         cards_by_player = [_deck.CardList(c, self.trump_suit) for c in cards_by_player]
         # check the sequence
         first_player = 0
-        for k, round_played_cards in enumerate(_utils.grouper(self.played_cards[:32], 4)):
+        for k, round_played_cards in enumerate(_utils.grouper(self.played_cards, 4)):
             # player order
             expected_players = (first_player + np.arange(4)) % 4
             players = [rc[0] for rc in round_played_cards]
@@ -185,7 +185,7 @@ class GameBoard:
                 assert card in cards_by_player[player].get_playable_cards(visible_round), error_msg
                 cards_by_player[player].remove(card)
         # last winner and function check
-        assert first_player == self.played_cards[-1][0], "Wrong winner of last round"
+        assert first_player == self.next_player, "Wrong winner of last round"
         assert not any(x for x in cards_by_player), "Remaining cards, this function is improperly coded"
 
     def get_current_round_cards(self):
@@ -204,8 +204,11 @@ class GameBoard:
         for k, (player, card) in enumerate(self.played_cards[:32]):
             current_sum += card.get_points(trump_suit)
             if not (k + 1) % 4:
-                winner = self.played_cards[k + 1][0]
-                points[winner % 2, k] = current_sum + (10 if k == 31 else 0)
+                if k == 31:
+                    points[self.next_player % 2, k] = current_sum + 10
+                else:
+                    winner = self.played_cards[k + 1][0]
+                    points[winner % 2, k] = current_sum + (10 if k == 31 else 0)
                 current_sum = 0
             # special reward
             if card in special_cards:

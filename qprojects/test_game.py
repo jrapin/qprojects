@@ -53,9 +53,9 @@ def test_board_dump_and_load():
 
 def test_game_board():
     filepath = Path(__file__).parent / "board_example.json"
-    if not filepath.exists():  # TODO: commit it
-        game = play_a_game()
-        game.board.dump(filepath)
+    # if not filepath.exists():  # TODO: commit it
+    game = play_a_game()
+    game.board.dump(filepath)
     board = _game.GameBoard.load(filepath)
     board.assert_valid()
 
@@ -66,7 +66,8 @@ class GameTests(TestCase):
     played_cards = [(0, '10❤'), (1, '9❤'), (2, '7❤'), (3, 'J❤'), (3, 'K♦'), (0, 'Q♦'), (1, '8♦'), (2, '7♦'), (3, '8♣'),
                     (0, '7♣'), (1, '10♦'), (2, 'J♣'), (2, 'A♣'), (3, 'K♣'), (0, '10♣'), (1, '8❤'), (1, 'A♠'), (2, '9♠'),
                     (3, 'K♠'), (0, 'J♠'), (1, 'Q♠'), (2, '10♠'), (3, '7♠'), (0, 'K❤'), (0, 'A❤'), (1, '8♠'), (2, 'Q♣'),
-                    (3, 'Q❤'), (0, '9♣'), (1, 'A♦'), (2, '9♦'), (3, 'J♦'), (0, 'None')]
+                    (3, 'Q❤'), (0, '9♣'), (1, 'A♦'), (2, '9♦'), (3, 'J♦')]
+    next_player = 0
 
     @genty.genty_dataset(
         correct=("❤", "", []),
@@ -78,9 +79,8 @@ class GameTests(TestCase):
         played_cards = list(self.played_cards)  # duplicate the list
         for index, value in changes:
             played_cards[index] = value
-        board = _game.GameBoard()
-        board.played_cards = [(p, C(c)) for p, c in played_cards[:32]] + [(0, None)]
-        board.biddings.append((0, 80, trump_suit))
+        played_cards = [(p, C(c)) for p, c in played_cards]
+        board = _game.GameBoard(played_cards, (0, 80, trump_suit), self.next_player)
         if not expected:
             board.assert_valid()
         else:
@@ -94,16 +94,12 @@ class GameTests(TestCase):
     @genty.genty_dataset(
         first_of_first=(0, []),
         first_of_second=(4, [0, 1, 2, 3]),
-        first_of_finished=(-1, [28, 29, 30, 31]),
         first_of_finished_2=(32, [28, 29, 30, 31]),
         second_of_second=(5, [4]),
     )
     def test_get_last_round(self, index, expected_inds):
-        board = _game.GameBoard()
-        board.biddings.append((0, 80, "❤"))
-        expected = [self.played_cards[ind][1] for ind in expected_inds]
-        expected = _deck.CardList([C(c) for c in expected], "❤")
-        played_cards = [(p, C(c)) for p, c in self.played_cards[:32]] + [(0, None)]
-        board.played_cards = played_cards[:index]
+        played_cards = [(p, C(c)) for p, c in self.played_cards[:index]]
+        board = _game.GameBoard(played_cards, (0, 80, "❤"), self.next_player)
+        expected = _deck.CardList([played_cards[i][1] for i in expected_inds], "❤")
         output = board.get_current_round_cards()
         output.assert_equal(expected)

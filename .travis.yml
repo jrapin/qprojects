@@ -7,4 +7,4 @@ install:
   - pip install -r requirements.txt
 # command to run tests
 script:
-  - nosetests
+  - nosetests -v --with-coverage --cover-tests --cover-package=qprojects qprojects
