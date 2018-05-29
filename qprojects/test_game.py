@@ -26,8 +26,11 @@ def test_game_initialization():
 
 
 def test_random_game():
-    play_a_game(verbose=True)
-    # raise Exception
+    game = play_a_game(verbose=True)
+    game.board.assert_valid()
+    points = game.board.compute_points()
+    total = points.sum()
+    assert total in [162, 182], "Impossible total {}.".format(total)
 
 
 def test_game_board_eq():

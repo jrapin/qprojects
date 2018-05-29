@@ -59,31 +59,12 @@ class Game:
         for player in self.players:
             player._cards.trump_suit = trump_suit  # bypass "cards" protection
 
-    def play_round(self, first_player_index):
-        if self.trump_suit is None:
-            raise RuntimeError("Trump suit should be specified")
-        for k in range(4):
-            player_ind = (first_player_index + k) % 4
-            selected = self.players[player_ind].get_card_to_play(self.board)
-            self.board.played_cards.append((player_ind, selected))
-
     def play_game(self, verbose=False):
-        first_player_index = 0
-        for k in range(1, 9):
-            self.play_round(first_player_index)
-            round_cards = self.board.get_current_round_cards()
-            assert len(round_cards) == 4
-            highest_card = round_cards.get_highest_round_card()
-            winner = round_cards.index(highest_card)
-            points = round_cards.count_points() + (10 if k == 8 else 0)
-            next_player_index = (winner + first_player_index) % 4
-            self.points[next_player_index % 2, k - 1] = points
-            if verbose:
-                print("Round #{} - Player {} starts: {}  ({} points)".format(k, first_player_index, round_cards.get_round_string(), points))
-            first_player_index = next_player_index
-        if verbose:
-            print(self.points)
-        self.board.played_cards.append((first_player_index, None))
+        for _ in range(32):
+            player = self.board.next_player
+            card = self.players[player].get_card_to_play(self.board)
+            self.board.add_played_card(card, verbose=verbose)
+        self.board.played_cards.append((self.board.next_player, None))  # TODO: remove when becomes useless
 
 
 class GameBoard:
@@ -100,6 +81,7 @@ class GameBoard:
     def __init__(self, played_cards=None, biddings=None):
         self.played_cards = [] if played_cards is None else played_cards
         self.biddings = [] if biddings is None else biddings
+        self.next_player = 0
 
     def _as_dict(self):
         data = {"played_cards": [(p, c.tag) for p, c in self.played_cards],
@@ -138,6 +120,20 @@ class GameBoard:
             data = json.load(f)
         played_cards = [(p, _deck.Card(c) if c != 'None' else None) for p, c in data["played_cards"]]
         return cls(played_cards, [tuple(b) for b in data["biddings"]])
+
+    def add_played_card(self, card, verbose=False):
+        self.played_cards.append((self.next_player, card))
+        if len(self.played_cards) % 4:
+            self.next_player = (self.next_player + 1) % 4
+        else:
+            round_cards = _deck.CardList([x[1] for x in self.played_cards[-4:]], self.trump_suit)
+            highest = round_cards.get_highest_round_card()
+            index = round_cards.index(highest)
+            self.next_player = (self.next_player + 1 + index) % 4
+            if verbose:
+                first_player_index = self.played_cards[-4][0]
+                print("Round #{} - Player {} starts: {}".format(len(self.played_cards) // 4, first_player_index,
+                                                                round_cards.get_round_string()))
 
     @property
     def trump_suit(self):
@@ -198,3 +194,22 @@ class GameBoard:
         end = min(len(self.played_cards), 32)
         start = max(0, ((end - 1) // 4)) * 4
         return _deck.CardList([x[1] for x in self.played_cards[start: end]], self.trump_suit)
+
+    def compute_points(self):
+        points = np.zeros((2, 32))
+        special_cards = {_deck.Card(c) for c in ["Qh", "Kh"]}
+        special_card_players = set()
+        trump_suit = self.trump_suit
+        current_sum = 0
+        for k, (player, card) in enumerate(self.played_cards[:32]):
+            current_sum += card.get_points(trump_suit)
+            if not (k + 1) % 4:
+                winner = self.played_cards[k + 1][0]
+                points[winner % 2, k] = current_sum + (10 if k == 31 else 0)
+                current_sum = 0
+            # special reward
+            if card in special_cards:
+                if player in special_card_players:
+                    points[player % 2, k] += 20
+                special_card_players.add(player)
+        return points
