@@ -80,7 +80,7 @@ def play_game(board, players, verbose=False):
     assert board.biddings, "Biddings must have been already performed"
     assert not board.played_cards, "No cards should have already been played"
     for k, player in enumerate(players):  # make sure the data is correct
-        assert player._order == max(3, k)
+        assert player._order == min(3, k)
         assert len(player.cards) == 8
     # game
     for _ in range(32):
