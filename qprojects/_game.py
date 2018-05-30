@@ -11,7 +11,8 @@ class DefaultPlayer:
     """
 
     def __init__(self):
-        self._cards = []
+        self._cards = _deck.CardList([])
+        self._order = None
 
     @property
     def cards(self):
@@ -19,12 +20,28 @@ class DefaultPlayer:
         """
         return _deck.CardList(self._cards, self._cards.trump_suit)
 
-    @cards.setter
-    def cards(self, cards):
-        assert len(cards) == 8
+    def initialize_game(self, order, cards):
+        """Initialize a game with order and cards.
+
+        Parameters
+        ----------
+        order: int
+            the order in which the player will play
+        cards: list
+            a list of 8 cards
+
+        Note
+        ----
+        A game can only be initialized if the card list is empty (no ongoing game)
+        """
+        assert not self._cards, "Cannot initialize a new game when card are still at play: {}".format(self._cards)
+        assert len(cards) == 8, "Wrong number of cards for initialization: {}.".format(self._cards)
         self._cards = cards
+        self._order = order
 
     def get_card_to_play(self, board):
+        if self._cards.trump_suit is None:
+            self._cards.trump_suit = board.trump_suit
         round_cards = board.get_current_round_cards()
         playable = self._cards.get_playable_cards([] if len(round_cards) == 4 else round_cards)
         selected = np.random.choice(playable)
@@ -32,38 +49,45 @@ class DefaultPlayer:
         return selected
 
 
-class Game:
+def initialize_players_cards(players):
+    """Initialize players for a new game.
+    This function sets the player order and its cards.
 
-    def __init__(self, players):
-        self.players = players
-        self._trump_suit = None
-        self.board = GameBoard()
-        self.points = np.zeros((2, 9))
-        self.initialize()
+    Parameter
+    ---------
+    player: list
+        a list of 4 players.
+    """
+    assert len(players) == 4
+    # initialize players' cards
+    cards = [_deck.Card(v + s) for s in _deck.SUITS for v in _deck.VALUES]
+    np.random.shuffle(cards)
+    for k, cards in enumerate(_utils.grouper(cards, 8)):
+        players[k].initialize_game(k, _deck.CardList(cards))
 
-    def initialize(self):
-        cards = [_deck.Card(v + s) for s in _deck.SUITS for v in _deck.VALUES]
-        np.random.shuffle(cards)
-        for k in range(4):
-            self.players[k].cards = _deck.CardList(cards[8 * k: 8 * (k + 1)])
-            if len({_deck.Card("K❤"), _deck.Card("Q❤")} & set(self.players[k].cards)) == 2:
-                self.points[k % 2, -1] = 20
 
-    @property
-    def trump_suit(self):
-        return self._trump_suit
+def play_game(board, players, verbose=False):
+    """Plays a game, given a board with biddings and initialized players.
 
-    @trump_suit.setter
-    def trump_suit(self, trump_suit):
-        self._trump_suit = trump_suit
-        for player in self.players:
-            player._cards.trump_suit = trump_suit  # bypass "cards" protection
-
-    def play_game(self, verbose=False):
-        for _ in range(32):
-            player = self.board.next_player
-            card = self.players[player].get_card_to_play(self.board)
-            self.board.add_played_card(card, verbose=verbose)
+    Parameters
+    ----------
+    board: GameBoard
+        a board, with biddings already performed, and no played cards
+    players: list
+        a list of 4 initialized players, with 8 cards each and given orders
+    """  # IMPROVEMENT: handle partially played games
+    # checks
+    assert board.biddings, "Biddings must have been already performed"
+    assert not board.played_cards, "No cards should have already been played"
+    for k, player in enumerate(players):  # make sure the data is correct
+        assert player._order == max(3, k)
+        assert len(player.cards) == 8
+    # game
+    for _ in range(32):
+        player_ind = board.next_player
+        card = players[player_ind].get_card_to_play(board)
+        board.add_played_card(card, verbose=verbose)
+    return board
 
 
 class GameBoard:
@@ -77,10 +101,10 @@ class GameBoard:
         the sequence of biddings, as a list of tuples of type (#player, points, trump_suit)
     """
 
-    def __init__(self, played_cards=None, biddings=None, next_player=0):
+    def __init__(self, played_cards=None, biddings=None):
         self.played_cards = [] if played_cards is None else played_cards
         self.biddings = [] if biddings is None else biddings
-        self.next_player = next_player
+        self.next_player = 0
 
     def _as_dict(self):
         data = {"played_cards": [(p, c.tag) for p, c in self.played_cards],
@@ -119,7 +143,9 @@ class GameBoard:
         with filepath.open("r") as f:
             data = json.load(f)
         played_cards = [(p, _deck.Card(c) if c != 'None' else None) for p, c in data["played_cards"]]
-        return cls(played_cards, [tuple(b) for b in data["biddings"]], data["next_player"])
+        board = cls(played_cards, [tuple(b) for b in data["biddings"]])
+        board.next_player = data["next_player"]
+        return board
 
     def add_played_card(self, card, verbose=False):
         self.played_cards.append((self.next_player, card))
@@ -196,6 +222,20 @@ class GameBoard:
         return _deck.CardList([x[1] for x in self.played_cards[start: end]], self.trump_suit)
 
     def compute_points(self):
+        """Computes the sequence of points for both teams, on a complete game.
+
+        Returns
+        -------
+        np.array
+            a 2x32 array, with row 0 corresponding to points earned by team #0
+            (players #0 and #2) and raw 1 to team #1 (players #1 and #3) at
+            each card played.
+
+        Note
+        ----
+        Only the 20 point bonus can be earned out of the end of a round.
+        """
+        assert self.is_complete, "Cannot compute the whole sequence on the fly"
         points = np.zeros((2, 32))
         special_cards = {_deck.Card(c) for c in ["Qh", "Kh"]}
         special_card_players = set()

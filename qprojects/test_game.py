@@ -10,25 +10,28 @@ from ._deck import Card as C
 
 
 def play_a_game(verbose=False):
-    game = _game.Game([_game.DefaultPlayer() for _ in range(4)])
-    game.board.biddings.append((0, 80, "❤"))
-    game.trump_suit = "❤"
-    game.play_game(verbose=verbose)
-    return game
+    players = [_game.DefaultPlayer() for _ in range(4)]
+    _game.initialize_players_cards(players)
+    board = _game.GameBoard([], [(0, 80, "❤")])
+    _game.play_game(board, players, verbose=verbose)
+    return board
 
 
 def test_game_initialization():
     # np.random.seed(12)
-    game = _game.Game([_game.DefaultPlayer() for _ in range(4)])
+    players = [_game.DefaultPlayer() for _ in range(4)]
+    _game.initialize_players_cards(players)
     # check no duplicate
-    playable = {c for p in game.players for c in p.cards}
+    playable = {c for p in players for c in p.cards}
     assert len(playable) == 32
+    np.testing.assert_array_equal([p._order for p in players], [0, 1, 2, 3],
+                                  err_msg="Order is not correctly initialized")
 
 
 def test_random_game():
-    game = play_a_game(verbose=True)
-    game.board.assert_valid()
-    points = game.board.compute_points()
+    board = play_a_game(verbose=True)
+    board.assert_valid()
+    points = board.compute_points()
     total = points.sum()
     assert total in [162, 182], "Impossible total {}.".format(total)
 
@@ -54,8 +57,8 @@ def test_board_dump_and_load():
 def test_game_board():
     filepath = Path(__file__).parent / "board_example.json"
     # if not filepath.exists():  # TODO: commit it
-    game = play_a_game()
-    game.board.dump(filepath)
+    board = play_a_game()
+    board.dump(filepath)
     board = _game.GameBoard.load(filepath)
     board.assert_valid()
 
@@ -80,7 +83,8 @@ class GameTests(TestCase):
         for index, value in changes:
             played_cards[index] = value
         played_cards = [(p, C(c)) for p, c in played_cards]
-        board = _game.GameBoard(played_cards, (0, 80, trump_suit), self.next_player)
+        board = _game.GameBoard(played_cards, (0, 80, trump_suit))
+        board.next_player = self.next_player
         if not expected:
             board.assert_valid()
         else:
@@ -99,7 +103,8 @@ class GameTests(TestCase):
     )
     def test_get_last_round(self, index, expected_inds):
         played_cards = [(p, C(c)) for p, c in self.played_cards[:index]]
-        board = _game.GameBoard(played_cards, (0, 80, "❤"), self.next_player)
+        board = _game.GameBoard(played_cards, (0, 80, "❤"))
+        board.next_player = self.next_player
         expected = _deck.CardList([played_cards[i][1] for i in expected_inds], "❤")
         output = board.get_current_round_cards()
         output.assert_equal(expected)
