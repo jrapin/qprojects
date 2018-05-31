@@ -31,9 +31,16 @@ def test_game_initialization():
 def test_random_game():
     board = play_a_game(verbose=True)
     board.assert_valid()
-    points = board.compute_points()
-    total = points.sum()
-    assert total in [162, 182], "Impossible total {}.".format(total)
+    points = board.points
+    assert points.sum() in [162, 182], "Impossible total {}.".format(points.sum())
+    np.testing.assert_array_equal(board.points, points, err_msg="Points computation repeats after finishing")
+    # dump, reload and check points
+    with tempfile.TemporaryDirectory() as tmp:
+        filepath = Path(tmp) / "random_board_dump_and_load_test.json"
+        board.dump(filepath)
+        board2 = _game.GameBoard.load(str(filepath))
+    np.testing.assert_array_equal(board2.points, points, err_msg="Points computation is erroneous after reloading")
+    np.testing.assert_array_equal(board2.points, points, err_msg="Points computation repeats after finishing")
 
 
 def test_game_board_eq():
@@ -52,15 +59,6 @@ def test_board_dump_and_load():
         board1.dump(filepath)
         board2 = _game.GameBoard.load(str(filepath))
     board1.assert_equal(board2)
-
-
-def test_game_board():
-    filepath = Path(__file__).parent / "board_example.json"
-    # if not filepath.exists():  # TODO: commit it
-    board = play_a_game()
-    board.dump(filepath)
-    board = _game.GameBoard.load(filepath)
-    board.assert_valid()
 
 
 @genty.genty

@@ -6,6 +6,9 @@ from . import _deck
 from . import _utils
 
 
+_BONUS_CARDS = {_deck.Card(c) for c in ["Qh", "Kh"]}
+
+
 class DefaultPlayer:
     """Player which selects one card randomly at each round
     """
@@ -105,6 +108,15 @@ class GameBoard:
         self.played_cards = [] if played_cards is None else played_cards
         self.biddings = [] if biddings is None else biddings
         self.next_player = 0
+        self._points = np.zeros((2, 32))
+        self._current_point_sum = 0
+        self._current_point_position = 0
+        self._bonus_players = set()
+
+    @property
+    def points(self):
+        self._process_played_cards_points()  # if not yet computed
+        return self._points
 
     def _as_dict(self):
         data = {"played_cards": [(p, c.tag) for p, c in self.played_cards],
@@ -149,6 +161,7 @@ class GameBoard:
 
     def add_played_card(self, card, verbose=False):
         self.played_cards.append((self.next_player, card))
+        player = self.next_player
         if len(self.played_cards) % 4:
             self.next_player = (self.next_player + 1) % 4
         else:
@@ -160,6 +173,23 @@ class GameBoard:
                 first_player_index = self.played_cards[-4][0]
                 print("Round #{} - Player {} starts: {}".format(len(self.played_cards) // 4, first_player_index,
                                                                 round_cards.get_round_string()))
+        index = len(self.played_cards) - 1
+        self._process_card_points(index, card, player, self.next_player)
+        return self._points[:, index]
+
+    def _process_card_points(self, index, card, player, next_player):
+        assert index == self._current_point_position, "Processing card #{} while expecting #{}".format(index, self._current_point_position)
+        self._current_point_sum += card.get_points(self.trump_suit)
+        if not (index + 1) % 4:  # end of round
+            self._points[next_player % 2, index] = self._current_point_sum + (10 if index == 31 else 0)
+            self._current_point_sum = 0
+            # special reward
+        if card in _BONUS_CARDS:
+            if player in self._bonus_players:
+                self._points[player % 2, index] += 20
+            self._bonus_players.add(player)
+        self._current_point_position += 1
+        return self._points
 
     @property
     def trump_suit(self):
@@ -221,7 +251,7 @@ class GameBoard:
         start = max(0, ((end - 1) // 4)) * 4
         return _deck.CardList([x[1] for x in self.played_cards[start: end]], self.trump_suit)
 
-    def compute_points(self):
+    def _process_played_cards_points(self):
         """Computes the sequence of points for both teams, on a complete game.
 
         Returns
@@ -235,24 +265,7 @@ class GameBoard:
         ----
         Only the 20 point bonus can be earned out of the end of a round.
         """
-        assert self.is_complete, "Cannot compute the whole sequence on the fly"
-        points = np.zeros((2, 32))
-        special_cards = {_deck.Card(c) for c in ["Qh", "Kh"]}
-        special_card_players = set()
-        trump_suit = self.trump_suit
-        current_sum = 0
-        for k, (player, card) in enumerate(self.played_cards[:32]):
-            current_sum += card.get_points(trump_suit)
-            if not (k + 1) % 4:
-                if k == 31:
-                    points[self.next_player % 2, k] = current_sum + 10
-                else:
-                    winner = self.played_cards[k + 1][0]
-                    points[winner % 2, k] = current_sum + (10 if k == 31 else 0)
-                current_sum = 0
-            # special reward
-            if card in special_cards:
-                if player in special_card_players:
-                    points[player % 2, k] += 20
-                special_card_players.add(player)
-        return points
+        unprocessed = self.played_cards[self._current_point_position:]
+        for k, (player, card) in enumerate(unprocessed):
+            next_player = self.next_player if k + 1 == len(unprocessed) else unprocessed[k + 1][0]
+            self._process_card_points(self._current_point_position, card, player, next_player)
