@@ -53,8 +53,8 @@ def test_game_points_global():
     np.testing.assert_array_equal(board.points, expected, "Missing bonus points")
     # replay with different trump
     mixer = {"❤": "♦", "♦": "❤"}
-    played_cards = [(p, c.value + mixer.get(c.suit, c.suit)) for p, c in board.played_cards]
-    board2 = _game.GameBoard(played_cards, [(0, 80, "♦")])
+    actions = [(p, c.value + mixer.get(c.suit, c.suit)) for p, c in board.actions]
+    board2 = _game.GameBoard(actions, [(0, 80, "♦")])
     board2.assert_valid()
     np.testing.assert_equal(board2.points.sum(), 162, "There should not be any bonus this time")
     expected[0, 21] = 0  # bonus
@@ -95,7 +95,7 @@ def test_board_dump_and_load():
 @genty.genty
 class GameTests(TestCase):
 
-    played_cards = tuple(_PLAYED_CARDS)
+    actions = tuple(_PLAYED_CARDS)
 
     @genty.genty_dataset(
         correct=("❤", "", []),
@@ -104,10 +104,10 @@ class GameTests(TestCase):
         duplicate=("❤", "Some cards are repeated", [(4, (3, 'J❤'))]),
     )
     def test_gameboard_assert_valid(self, trump_suit, expected, changes):
-        played_cards = list(self.played_cards)  # duplicate the list
+        actions = list(self.actions)  # duplicate the list
         for index, value in changes:
-            played_cards[index] = value
-        board = _game.GameBoard(played_cards, [(0, 80, trump_suit)])
+            actions[index] = value
+        board = _game.GameBoard(actions, [(0, 80, trump_suit)])
         if not expected:
             board.assert_valid()
         else:
@@ -125,8 +125,8 @@ class GameTests(TestCase):
         second_of_second=(5, [4]),
     )
     def test_get_last_round(self, index, expected_inds):
-        board = _game.GameBoard(self.played_cards[:index], [(0, 80, "❤")])
-        expected = _deck.CardList([self.played_cards[i][1] for i in expected_inds], "❤")
+        board = _game.GameBoard(self.actions[:index], [(0, 80, "❤")])
+        expected = _deck.CardList([self.actions[i][1] for i in expected_inds], "❤")
         output = board.get_current_round_cards()
         output.assert_equal(expected)
 

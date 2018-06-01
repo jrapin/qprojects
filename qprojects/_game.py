@@ -52,7 +52,7 @@ class DefaultPlayer:
         self._cards.remove(selected)
         return selected
 
-    def set_reward(self, value):
+    def set_reward(self, action, value):  # pylint: disable=unused-argument
         self.reward_sum += value
 
 
@@ -79,13 +79,13 @@ def play_game(board, players, verbose=False):
     Parameters
     ----------
     board: GameBoard
-        a board, with biddings already performed, and no played cards
+        a board, with biddings already performed, but no action
     players: list
         a list of 4 initialized players, with 8 cards each and given orders
     """  # IMPROVEMENT: handle partially played games
     # checks
     assert board.biddings, "Biddings must have been already performed"
-    assert not board.played_cards, "No cards should have already been played"
+    assert not board.actions, "No cards should have already been played"
     for k, player in enumerate(players):  # make sure the data is correct
         assert player._order == min(3, k)
         assert len(player.cards) == 8
@@ -95,7 +95,7 @@ def play_game(board, players, verbose=False):
         card = players[player_ind].get_card_to_play(board)
         points = board.add_played_card(card, verbose=verbose)
         for k, player in enumerate(players):
-            player.set_reward(points[k % 2])
+            player.set_reward(board.actions[-1], points[k % 2])
     return board
 
 
@@ -104,32 +104,32 @@ class GameBoard:
 
     Attributes
     ----------
-    played_cards: list
+    actions: list
         played cards, as a list of tuples of type (#player, card)
     biddings: list
         the sequence of biddings, as a list of tuples of type (#player, points, trump_suit)
     """
 
-    def __init__(self, played_cards=None, biddings=None):
+    def __init__(self, actions=None, biddings=None):
         self.biddings = [] if biddings is None else [(p, v, _deck._SUIT_CONVERTER.get(s, s)) for p, v, s in biddings]
         self.next_player = 0
         self.points = np.zeros((2, 32), dtype=int)
-        self._played_cards = [] if played_cards is None else [(p, _deck.Card(c)) for p, c in played_cards]
+        self._actions = [] if actions is None else [(p, _deck.Card(c)) for p, c in actions]
         self._current_point_sum = 0
         self._bonus_players = set()
         self._current_point_position = 0  # checking that all cards are counted only once
-        if self._played_cards:
+        if self._actions:
             self._update_next_player()
-        self._process_played_cards_points()
+        self._process_actions_points()
 
     def _as_dict(self):
-        data = {"played_cards": [(p, c.tag) for p, c in self.played_cards],
+        data = {"actions": [(p, c.tag) for p, c in self.actions],
                 "biddings": self.biddings}
         return data
 
     @property
-    def played_cards(self):
-        return tuple(self._played_cards)  # avoid direct modification
+    def actions(self):
+        return tuple(self._actions)  # avoid direct modification
 
     def dump(self, filepath):
         """Dumps a GameBoard to a file
@@ -161,8 +161,8 @@ class GameBoard:
         filepath = Path(filepath)
         with filepath.open("r") as f:
             data = json.load(f)
-        played_cards = [(p, _deck.Card(c)) for p, c in data["played_cards"]]
-        board = cls(played_cards, [tuple(b) for b in data["biddings"]])
+        actions = [(p, _deck.Card(c)) for p, c in data["actions"]]
+        board = cls(actions, [tuple(b) for b in data["biddings"]])
         return board
 
     def add_played_card(self, card, verbose=False):
@@ -182,26 +182,26 @@ class GameBoard:
         np.array
             the points earned by each time, as an array of 2 elements
         """
-        self._played_cards.append((self.next_player, card))
+        self._actions.append((self.next_player, card))
         player = self.next_player
         self._update_next_player()
-        if verbose and not len(self._played_cards) % 4:
-            first_player_index = self.played_cards[-4][0]
-            print("Round #{} - Player {} starts: {}".format(len(self.played_cards) // 4, first_player_index,
+        if verbose and not len(self._actions) % 4:
+            first_player_index = self.actions[-4][0]
+            print("Round #{} - Player {} starts: {}".format(len(self.actions) // 4, first_player_index,
                                                             self.get_current_round_cards().get_round_string()))
-        return self._process_card_points(len(self.played_cards) - 1, card, player, self.next_player)
+        return self._process_card_points(len(self.actions) - 1, card, player, self.next_player)
 
     def _update_next_player(self):
         """Updates the next_player attribute to either the following player (inside a round),
         or the winner (end of a round).
         """
-        if len(self._played_cards) % 4:
-            self.next_player = (self._played_cards[-1][0] + 1) % 4
+        if len(self._actions) % 4:
+            self.next_player = (self._actions[-1][0] + 1) % 4
         else:
-            round_cards = _deck.CardList([x[1] for x in self._played_cards[-4:]], self.trump_suit)
+            round_cards = _deck.CardList([x[1] for x in self._actions[-4:]], self.trump_suit)
             highest = round_cards.get_highest_round_card()
             index = round_cards.index(highest)
-            self.next_player = (self._played_cards[-4][0] + index) % 4
+            self.next_player = (self._actions[-4][0] + index) % 4
 
     def _process_card_points(self, index, card, player, next_player):
         """Computes the points earned after a card being played.
@@ -238,7 +238,7 @@ class GameBoard:
     def assert_equal(self, other):
         """Asserts that the board is identical to the provided other board.
         """
-        for name in ["biddings", "played_cards"]:
+        for name in ["biddings", "actions"]:
             for k, (element1, element2) in enumerate(zip(getattr(self, name), getattr(other, name))):
                 if element1 != element2:
                     raise AssertionError("Discrepency with element #{} of {}: {} Vs {}".format(k, name, element1, element2))
@@ -249,25 +249,25 @@ class GameBoard:
         The game is considered complete when all 32 cards are played and the 33rd element provides
         the winner of the last round.
         """
-        return len(self.played_cards) == 32
+        return len(self.actions) == 32
 
     def assert_valid(self):
         """Asserts that the whole sequence is complete and corresponds to a valid game.
         """
         assert self.is_complete, "Game is not complete"
-        assert len({x[1] for x in self.played_cards}) == 32, "Some cards are repeated"
+        assert len({x[1] for x in self.actions}) == 32, "Some cards are repeated"
         cards_by_player = list(self.replay_cards_iterator(with_trump_suit=True))
         # check the sequence
         first_player = 0
-        for k, round_played_cards in enumerate(_utils.grouper(self.played_cards, 4)):
+        for k, round_actions in enumerate(_utils.grouper(self.actions, 4)):
             # player order
             expected_players = (first_player + np.arange(4)) % 4
-            players = [rc[0] for rc in round_played_cards]
+            players = [rc[0] for rc in round_actions]
             np.testing.assert_array_equal(players, expected_players, "Wrong player for round #{}".format(k))
-            round_cards_list = _deck.CardList([x[1] for x in round_played_cards], self.trump_suit)
+            round_cards_list = _deck.CardList([x[1] for x in round_actions], self.trump_suit)
             first_player = (first_player + round_cards_list.index(round_cards_list.get_highest_round_card())) % 4
             # cards played
-            for i, (player, card) in enumerate(round_played_cards):
+            for i, (player, card) in enumerate(round_actions):
                 visible_round = _deck.CardList(round_cards_list[:i], self.trump_suit)
                 error_msg = "Unauthorized {} played by player {}.".format(card, player)
                 assert card in cards_by_player[player].get_playable_cards(visible_round), error_msg
@@ -279,11 +279,11 @@ class GameBoard:
     def get_current_round_cards(self):
         """Return the cards for the current round (or the round just played if all 4 cards have been played)
         """
-        end = min(len(self.played_cards), 32)
+        end = min(len(self.actions), 32)
         start = max(0, ((end - 1) // 4)) * 4
-        return _deck.CardList([x[1] for x in self.played_cards[start: end]], self.trump_suit)
+        return _deck.CardList([x[1] for x in self.actions[start: end]], self.trump_suit)
 
-    def _process_played_cards_points(self):
+    def _process_actions_points(self):
         """Computes the sequence of points for both teams, on a complete game.
 
         Returns
@@ -297,7 +297,7 @@ class GameBoard:
         ----
         Only the 20 point bonus can be earned out of the end of a round.
         """
-        unprocessed = self.played_cards[self._current_point_position:]
+        unprocessed = self.actions[self._current_point_position:]
         for k, (player, card) in enumerate(unprocessed):
             next_player = self.next_player if k + 1 == len(unprocessed) else unprocessed[k + 1][0]
             self._process_card_points(self._current_point_position, card, player, next_player)
@@ -317,6 +317,6 @@ class GameBoard:
         """
         assert self.is_complete, "Only finisehed games can be replayed"
         cards_by_player = [[] for _ in range(4)]
-        for p_card in self.played_cards:
+        for p_card in self.actions:
             cards_by_player[p_card[0]].append(p_card[1])
         return (_deck.CardList(cards, self.trump_suit if with_trump_suit else None) for cards in cards_by_player)
