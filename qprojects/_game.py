@@ -16,6 +16,7 @@ class DefaultPlayer:
     def __init__(self):
         self._cards = _deck.CardList([])
         self._order = None
+        self.reward_sum = 0
 
     @property
     def cards(self):
@@ -50,6 +51,9 @@ class DefaultPlayer:
         selected = np.random.choice(playable)
         self._cards.remove(selected)
         return selected
+
+    def set_reward(self, value):
+        self.reward_sum += value
 
 
 def initialize_players_cards(players):
@@ -89,7 +93,9 @@ def play_game(board, players, verbose=False):
     for _ in range(32):
         player_ind = board.next_player
         card = players[player_ind].get_card_to_play(board)
-        board.add_played_card(card, verbose=verbose)
+        points = board.add_played_card(card, verbose=verbose)
+        for k, player in enumerate(players):
+            player.set_reward(points[k % 2])
     return board
 
 
@@ -250,10 +256,7 @@ class GameBoard:
         """
         assert self.is_complete, "Game is not complete"
         assert len({x[1] for x in self.played_cards}) == 32, "Some cards are repeated"
-        cards_by_player = [[] for _ in range(4)]
-        for p_card in self.played_cards:
-            cards_by_player[p_card[0]].append(p_card[1])
-        cards_by_player = [_deck.CardList(c, self.trump_suit) for c in cards_by_player]
+        cards_by_player = list(self.replay_cards_iterator(with_trump_suit=True))
         # check the sequence
         first_player = 0
         for k, round_played_cards in enumerate(_utils.grouper(self.played_cards, 4)):
@@ -299,11 +302,21 @@ class GameBoard:
             next_player = self.next_player if k + 1 == len(unprocessed) else unprocessed[k + 1][0]
             self._process_card_points(self._current_point_position, card, player, next_player)
 
-    def replay_cards_iterator(self):
+    def replay_cards_iterator(self, with_trump_suit=False):
         """Create a new board with same card initializaton
+
+        Parameter
+        ---------
+        with_trump_suit: bool
+            whether to set the same trump suit to the yielded Card lists (sets it to None otherwise)
 
         Returns
         -------
+        generator
+            a generator providing the cards of each player (from a complete game)
         """
-        assert self.is_finished, "Only finisehed games can be replayed"
-        return _utils.grouper([x[1] for x in self.played_cards], 8)
+        assert self.is_complete, "Only finisehed games can be replayed"
+        cards_by_player = [[] for _ in range(4)]
+        for p_card in self.played_cards:
+            cards_by_player[p_card[0]].append(p_card[1])
+        return (_deck.CardList(cards, self.trump_suit if with_trump_suit else None) for cards in cards_by_player)

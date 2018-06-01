@@ -62,7 +62,16 @@ def test_game_points_global():
 
 
 def test_game_points_local():
-    pass
+    players = [_game.DefaultPlayer() for _ in range(4)]
+    board = _game.GameBoard(_PLAYED_CARDS, [(0, 80, "h")])
+    for k, cards in enumerate(board.replay_cards_iterator()):
+        players[k].initialize_game(k, cards)
+    board = _game.GameBoard([], [(0, 80, '❤')])
+    _game.play_game(board, players, verbose=True)
+    np.testing.assert_equal(players[0].reward_sum, 74)
+    np.testing.assert_equal(players[1].reward_sum, 88)
+    rewards = [players[2].reward_sum, players[3].reward_sum]
+    np.testing.assert_array_equal(rewards, board.points.sum(axis=1))
 
 
 def test_game_board_eq():
