@@ -105,24 +105,25 @@ class GameBoard:
     """
 
     def __init__(self, played_cards=None, biddings=None):
-        self.played_cards = [] if played_cards is None else played_cards
         self.biddings = [] if biddings is None else biddings
         self.next_player = 0
-        self._points = np.zeros((2, 32))
+        self.points = np.zeros((2, 32), dtype=int)
+        self._played_cards = [] if played_cards is None else played_cards
         self._current_point_sum = 0
-        self._current_point_position = 0
         self._bonus_players = set()
-
-    @property
-    def points(self):
-        self._process_played_cards_points()  # if not yet computed
-        return self._points
+        self._current_point_position = 0  # checking that all cards are counted only once
+        if self._played_cards:
+            self._update_next_player()
+        self._process_played_cards_points()
 
     def _as_dict(self):
         data = {"played_cards": [(p, c.tag) for p, c in self.played_cards],
-                "biddings": self.biddings,
-                "next_player": self.next_player}
+                "biddings": self.biddings}
         return data
+
+    @property
+    def played_cards(self):
+        return tuple(self._played_cards)  # avoid direct modification
 
     def dump(self, filepath):
         """Dumps a GameBoard to a file
@@ -154,42 +155,70 @@ class GameBoard:
         filepath = Path(filepath)
         with filepath.open("r") as f:
             data = json.load(f)
-        played_cards = [(p, _deck.Card(c) if c != 'None' else None) for p, c in data["played_cards"]]
+        played_cards = [(p, _deck.Card(c)) for p, c in data["played_cards"]]
         board = cls(played_cards, [tuple(b) for b in data["biddings"]])
-        board.next_player = data["next_player"]
         return board
 
     def add_played_card(self, card, verbose=False):
-        self.played_cards.append((self.next_player, card))
+        """Add the next card played.
+        The player is assumed to be the next_player.
+        This function saves the action, updates the next player and computes points.
+
+        Parameters
+        ----------
+        card: Card
+            the card to play
+        verbose: bool
+            whether to print a summary after each round
+
+        Returns
+        -------
+        np.array
+            the points earned by each time, as an array of 2 elements
+        """
+        self._played_cards.append((self.next_player, card))
         player = self.next_player
-        if len(self.played_cards) % 4:
-            self.next_player = (self.next_player + 1) % 4
+        self._update_next_player()
+        if verbose and not len(self._played_cards) % 4:
+            first_player_index = self.played_cards[-4][0]
+            print("Round #{} - Player {} starts: {}".format(len(self.played_cards) // 4, first_player_index,
+                                                            self.get_current_round_cards().get_round_string()))
+        return self._process_card_points(len(self.played_cards) - 1, card, player, self.next_player)
+
+    def _update_next_player(self):
+        """Updates the next_player attribute to either the following player (inside a round),
+        or the winner (end of a round).
+        """
+        if len(self._played_cards) % 4:
+            self.next_player = (self._played_cards[-1][0] + 1) % 4
         else:
-            round_cards = _deck.CardList([x[1] for x in self.played_cards[-4:]], self.trump_suit)
+            round_cards = _deck.CardList([x[1] for x in self._played_cards[-4:]], self.trump_suit)
             highest = round_cards.get_highest_round_card()
             index = round_cards.index(highest)
-            self.next_player = (self.next_player + 1 + index) % 4
-            if verbose:
-                first_player_index = self.played_cards[-4][0]
-                print("Round #{} - Player {} starts: {}".format(len(self.played_cards) // 4, first_player_index,
-                                                                round_cards.get_round_string()))
-        index = len(self.played_cards) - 1
-        self._process_card_points(index, card, player, self.next_player)
-        return self._points[:, index]
+            self.next_player = (self._played_cards[-4][0] + index) % 4
 
     def _process_card_points(self, index, card, player, next_player):
+        """Computes the points earned after a card being played.
+        This function keeps a record of unaffected points (inside a round), and updates the "points"
+        attribute.
+
+        Returns
+        -------
+        np.array
+            the points earned by each time, as an array of 2 elements
+        """
         assert index == self._current_point_position, "Processing card #{} while expecting #{}".format(index, self._current_point_position)
         self._current_point_sum += card.get_points(self.trump_suit)
         if not (index + 1) % 4:  # end of round
-            self._points[next_player % 2, index] = self._current_point_sum + (10 if index == 31 else 0)
+            self.points[next_player % 2, index] = self._current_point_sum + (10 if index == 31 else 0)
             self._current_point_sum = 0
             # special reward
-        if card in _BONUS_CARDS:
+        if self.trump_suit == "❤" and card in _BONUS_CARDS:
             if player in self._bonus_players:
-                self._points[player % 2, index] += 20
+                self.points[player % 2, index] += 20
             self._bonus_players.add(player)
         self._current_point_position += 1
-        return self._points
+        return self.points[:, index]
 
     @property
     def trump_suit(self):
