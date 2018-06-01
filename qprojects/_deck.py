@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*
 import itertools
+import collections
 import numpy as np
 
 
@@ -164,18 +165,22 @@ class CardList(list):
         ----------
         round_cards: list
             list of cards played in the round
+
+        Note
+        ----
+        The order of the output cards is deterministic, so as to be able to control randomness.
         """
         if self.trump_suit is None:
             raise RuntimeError("Playable cards cannot be specified when trump_suit is not specified")
         if not round_cards:
             return self
-        hand_cards_dict = {}
+        hand_cards_dict = collections.OrderedDict()
         for card in self:
             hand_cards_dict.setdefault(card.suit, []).append(card)
         # same suit case
         first_suit = round_cards[0].suit
         if first_suit in hand_cards_dict and first_suit != self.trump_suit:
-            return hand_cards_dict[first_suit]
+            return CardList(hand_cards_dict[first_suit], self.trump_suit)
         # available trumps
         playable = hand_cards_dict.get(self.trump_suit, [])
         highest_card = round_cards.get_highest_round_card()

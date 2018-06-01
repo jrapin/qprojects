@@ -67,14 +67,14 @@ class DeckTests(TestCase):
     @genty.genty_dataset(
         same_suit=(True, ["8♦", "Q♦"], ["9♦", "K♦"]),
         same_suit_trump_by_partner=(True, ["8❤", "Q♦"], ["A❤"]),
-        same_suit_high_trump_by_partner=(True, ["J❤", "Q♦"], ["7❤", "A❤"]),
-        no_card=(True, ["7♣", "8♣"], ["7❤", "A❤"]),
-        no_card_with_lead=(True, ["9♣", "8♣"], ["7❤", "A❤", "K♦", "Q♠", "9♦", "J♠"]),
+        same_suit_high_trump_by_partner=(True, ["J❤", "Q♦"], ["A❤", "7❤"]),
+        no_card=(True, ["7♣", "8♣"], ["A❤", "7❤"]),
+        no_card_with_lead=(True, ["9♣", "8♣"], ["A❤", "7❤", "9♦", "K♦", "Q♠", "J♠"]),
         no_card_with_trump=(True, ["8♣", "8❤"], ["A❤"]),
-        no_card_with_high_trump=(True, ["8♣", "J❤"], ["7❤", "A❤"]),
-        no_card_with_trump_lead=(True, ["8♣", "8❤", "9♣"], ["A❤", "K♦", "Q♠", "9♦", "J♠"]),
-        no_card_no_trump=(False, ["8♣", "8❤"], ["K♦", "Q♠", "9♦", "J♠"]),
-        first_no_trump=(False, [], ["K♦", "Q♠", "9♦", "J♠"]),
+        no_card_with_high_trump=(True, ["8♣", "J❤"], ["A❤", "7❤"]),
+        no_card_with_trump_lead=(True, ["8♣", "8❤", "9♣"], ["A❤", "9♦", "K♦", "Q♠", "J♠"]),
+        no_card_no_trump=(False, ["8♣", "8❤"], ["9♦", "K♦", "Q♠", "J♠"]),
+        first_no_trump=(False, [], ["9♦", "K♦", "Q♠", "J♠"]),
     )
     def test_get_playable_cards(self, has_trump, round_cards, expected):
         trump_suit = "❤"
@@ -84,6 +84,8 @@ class DeckTests(TestCase):
         hand_cards = _deck.CardList(hand_cards, trump_suit)
         playable = hand_cards.get_playable_cards(round_cards)
         _utils.assert_set_equal(playable, expected)
+        # check that the order is deterministic
+        playable.assert_equal(_deck.CardList(expected, trump_suit=trump_suit))
 
     @genty.genty_dataset(
         no_trump=(["Q♦", "K♠", "9♦", "J♠"], '[ Q♦  ]    K♠       9♦       J♠     '),
