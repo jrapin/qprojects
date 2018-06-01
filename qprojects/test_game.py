@@ -61,7 +61,7 @@ def test_game_points_global():
     np.testing.assert_array_equal(board2.points, expected, "Are there bonus points?")
 
 
-def test_game_points_local():
+def test_game_points_local_and_default_player():
     players = [_game.DefaultPlayer() for _ in range(4)]
     board = _game.GameBoard(_PLAYED_CARDS, [(0, 80, "h")])
     for k, cards in enumerate(board.replay_cards_iterator()):
@@ -72,6 +72,8 @@ def test_game_points_local():
     np.testing.assert_equal(players[1].reward_sum, 88)
     rewards = [players[2].reward_sum, players[3].reward_sum]
     np.testing.assert_array_equal(rewards, board.points.sum(axis=1))
+    np.testing.assert_equal(players[0].get_acceptation_ratio(), 0)
+    np.testing.assert_equal(len(players[0]._initial_cards), 8)
 
 
 def test_game_board_eq():

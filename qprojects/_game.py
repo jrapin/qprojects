@@ -10,13 +10,29 @@ _BONUS_CARDS = {_deck.Card(c) for c in ["Qh", "Kh"]}
 
 
 class DefaultPlayer:
-    """Player which selects one card randomly at each round
+    """Player which selects one card randomly at each round.
+
+    Note
+    ----
+    This class is the base class for other players. They should mostly improve
+    methods "set_reward" and "_propose_card_to_play". A proposition can be rejected if
+    it proposed an card which could not be played. A random choice is made in this case,
+    and the acceptation_ratio attribute allows to keep track of how often the propositions
+    are accepted.
     """
 
     def __init__(self):
         self._cards = _deck.CardList([])
+        self._initial_cards = _deck.CardList([])  # keep a record of initial cards for each game
         self._order = None
+        self._card_played_count = 0
+        self._erroneous_selection_count = 0
         self.reward_sum = 0
+
+    def get_acceptation_ratio(self):
+        """Ratio of card proposition which have been accepted (allowed to play)
+        """
+        return (self._card_played_count - self._erroneous_selection_count) / self._card_played_count
 
     @property
     def cards(self):
@@ -41,19 +57,76 @@ class DefaultPlayer:
         assert not self._cards, "Cannot initialize a new game when card are still at play: {}".format(self._cards)
         assert len(cards) == 8, "Wrong number of cards for initialization: {}.".format(self._cards)
         self._cards = cards
+        self._initial_cards = _deck.CardList(cards)
         self._order = order
 
-    def get_card_to_play(self, board):
+    def _get_playable_cards(self, board):
+        """Returns the cards that can be played
+        """
         if self._cards.trump_suit is None:
             self._cards.trump_suit = board.trump_suit
         round_cards = board.get_current_round_cards()
-        playable = self._cards.get_playable_cards([] if len(round_cards) == 4 else round_cards)
-        selected = np.random.choice(playable)
+        return self._cards.get_playable_cards([] if len(round_cards) == 4 else round_cards)
+
+    def get_card_to_play(self, board):
+        """Returns an acceptable card to play.
+
+        Parameter
+        ---------
+        board: GameBoard
+            the current board for the game
+
+        Returns
+        -------
+        Card
+            an acceptable card to play in the current game
+
+        Note
+        ----
+        This function makes sure the sent card is acceptable to play. It keeps tracks of remaining
+        cards, and of how often the propositions (from a neural network for instance) where accepted.
+        Propositions are provided through the "_propose_card_to_play" method.
+        """
+        selected = self._propose_card_to_play(board)
+        playable = self._get_playable_cards(board)
+        if selected is None or selected not in playable:
+            selected = np.random.choice(playable)
+            self._erroneous_selection_count += 1
         self._cards.remove(selected)
+        self._card_played_count += 1
         return selected
 
-    def set_reward(self, action, value):  # pylint: disable=unused-argument
+    def set_reward(self, board, value):  # pylint: disable=unused-argument
+        """Function to be called after each action on the board, to provide feedbacks for neural networks
+        for instance.
+
+        Parameter
+        ---------
+        board: GameBoard
+            the current board for the game
+        value: int
+            the value of the reward
+        """
         self.reward_sum += value
+
+    def _propose_card_to_play(self, board):  # pylint: disable=unused-argument
+        """Propose a card to play thanks to an advanced method.
+
+        Parameter
+        ---------
+        board: GameBoard
+            the current board for the game
+
+        Returns
+        -------
+        Card
+            a card proposition for playig, which may be unacceptable.
+
+        Note
+        ----
+        Implement a technique here.
+        """
+        pass
 
 
 def initialize_players_cards(players):
@@ -95,7 +168,7 @@ def play_game(board, players, verbose=False):
         card = players[player_ind].get_card_to_play(board)
         points = board.add_played_card(card, verbose=verbose)
         for k, player in enumerate(players):
-            player.set_reward(board.actions[-1], points[k % 2])
+            player.set_reward(board, points[k % 2])
     return board
 
 
