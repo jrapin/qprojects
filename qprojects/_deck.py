@@ -42,6 +42,13 @@ class Card:
             self._tag = self._tag[:-1] + _SUIT_CONVERTER[self._tag[-1]]
         assert self.value in _POINTS, 'Unknown value "{}".'.format(self.value)
         assert self.suit in SUITS, 'Unknown suit "{}".'.format(self.suit)
+        self._global_index = None
+
+    @property
+    def global_index(self):
+        if self._global_index is None:
+            self._global_index = 8 * SUITS.index(self.suit) + VALUES.index(self.value)
+        return self._global_index
 
     @property
     def tag(self):
@@ -192,6 +199,12 @@ class CardList(list):
             playable.extend([c for suit, cards in hand_cards_dict.items() for c in cards if suit != self.trump_suit])
         return CardList(playable, self.trump_suit)
 
+    def as_array(self):
+        array = np.zeros((32,))
+        for card in self:
+            array[card.global_index] = 1
+        return array
+
     def assert_equal(self, other):
         """Asserts that two card lists are equal, with comprehensive error message.
         This function should be used for testing.
@@ -200,3 +213,9 @@ class CardList(list):
         for k, (card1, card2) in enumerate(itertools.zip_longest(self, other)):
             np.testing.assert_equal(card1, card2, err_msg="CardLists {} and {} are different.\n"
                                     "Wrong value for element #{}.".format(self, other, k))
+
+
+def get_full_deck():
+    """Returns a sorted full deck
+    """
+    return CardList((v + s for s in SUITS for v in VALUES))

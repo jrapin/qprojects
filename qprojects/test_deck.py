@@ -7,7 +7,7 @@ from . import _utils
 from ._deck import Card as C
 
 
-def test_card_equality():
+def test_card_equality_and_global_index():
     card1 = _deck.Card("K♦")
     card2 = _deck.Card("K♦")
     assert card1 == card2
@@ -17,6 +17,7 @@ def test_card_equality():
     _ = _deck.Card("Q♦")
     card3 = _deck.Card(card2)
     assert card3 == card2
+    np.testing.assert_equal(card1.global_index, 13)
 
 
 def test_card_hash():
@@ -50,6 +51,13 @@ def test_get_highest_round_card_empty():
 def test_get_round_string_error():
     cards = _deck.CardList([], "h")
     np.testing.assert_raises(RuntimeError, cards.get_round_string)
+
+
+def test_full_deck_and_cardlist_as_array():
+    deck = _deck.get_full_deck()
+    np.testing.assert_equal(len(deck), 32)
+    np.testing.assert_equal(len(set(deck)), 32)
+    np.testing.assert_array_equal(deck.as_array(), [1 for _ in range(32)])
 
 
 @genty.genty

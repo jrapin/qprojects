@@ -67,7 +67,7 @@ def initialize_players_cards(players):
     """
     assert len(players) == 4
     # initialize players' cards
-    cards = [_deck.Card(v + s) for s in _deck.SUITS for v in _deck.VALUES]
+    cards = _deck.get_full_deck()
     np.random.shuffle(cards)
     for k, cards in enumerate(_utils.grouper(cards, 8)):
         players[k].initialize_game(k, _deck.CardList(cards))
