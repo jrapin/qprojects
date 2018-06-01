@@ -32,14 +32,14 @@ class Card:
 
         Parameters
         ----------
-        tag: str
+        tag: str (or Card)
             Concatenation of:
                 - a value, among: "7", "8", "9", "J", "Q", "K", "10", "A"
                 - a suit, among: "❤", "♦", "♠", "♣" (or for simplicity's sake: "h", "d", "s", "c")
         """
-        self._tag = tag
-        if tag[-1] in _SUIT_CONVERTER:  # to be able to use h d s or c as suit
-            self._tag = tag[:-1] + _SUIT_CONVERTER[tag[-1]]
+        self._tag = tag.tag if isinstance(tag, Card) else tag
+        if self._tag[-1] in _SUIT_CONVERTER:  # to be able to use h d s or c as suit
+            self._tag = self._tag[:-1] + _SUIT_CONVERTER[self._tag[-1]]
         assert self.value in _POINTS, 'Unknown value "{}".'.format(self.value)
         assert self.suit in SUITS, 'Unknown suit "{}".'.format(self.suit)
 
@@ -106,7 +106,7 @@ class CardList(list):
     """
 
     def __init__(self, cards, trump_suit=None):
-        super().__init__(cards)
+        super().__init__((Card(x) for x in cards))
         self.trump_suit = _SUIT_CONVERTER.get(trump_suit, trump_suit)
         if self.trump_suit is not None:
             assert self.trump_suit in SUITS, 'Unknown suit "{}"'.format(self.trump_suit)

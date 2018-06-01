@@ -105,10 +105,10 @@ class GameBoard:
     """
 
     def __init__(self, played_cards=None, biddings=None):
-        self.biddings = [] if biddings is None else biddings
+        self.biddings = [] if biddings is None else [(p, v, _deck._SUIT_CONVERTER.get(s, s)) for p, v, s in biddings]
         self.next_player = 0
         self.points = np.zeros((2, 32), dtype=int)
-        self._played_cards = [] if played_cards is None else played_cards
+        self._played_cards = [] if played_cards is None else [(p, _deck.Card(c)) for p, c in played_cards]
         self._current_point_sum = 0
         self._bonus_players = set()
         self._current_point_position = 0  # checking that all cards are counted only once
@@ -298,3 +298,12 @@ class GameBoard:
         for k, (player, card) in enumerate(unprocessed):
             next_player = self.next_player if k + 1 == len(unprocessed) else unprocessed[k + 1][0]
             self._process_card_points(self._current_point_position, card, player, next_player)
+
+    def replay_cards_iterator(self):
+        """Create a new board with same card initializaton
+
+        Returns
+        -------
+        """
+        assert self.is_finished, "Only finisehed games can be replayed"
+        return _utils.grouper([x[1] for x in self.played_cards], 8)

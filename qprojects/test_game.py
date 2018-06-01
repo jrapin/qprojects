@@ -34,7 +34,7 @@ def test_game_initialization():
                                   err_msg="Order is not correctly initialized")
 
 
-def test_game_points():
+def test_game_points_global():
     np.random.seed(12)
     players = [_game.DefaultPlayer() for _ in range(4)]
     special = ['Q❤', 'K❤']
@@ -53,24 +53,28 @@ def test_game_points():
     np.testing.assert_array_equal(board.points, expected, "Missing bonus points")
     # replay with different trump
     mixer = {"❤": "♦", "♦": "❤"}
-    played_cards = [(p, C(c.value + mixer.get(c.suit, c.suit))) for p, c in board.played_cards]
+    played_cards = [(p, c.value + mixer.get(c.suit, c.suit)) for p, c in board.played_cards]
     board2 = _game.GameBoard(played_cards, [(0, 80, "♦")])
     board2.assert_valid()
-    np.testing.assert_equal(board2.points.sum(), 162)
+    np.testing.assert_equal(board2.points.sum(), 162, "There should not be any bonus this time")
     expected[0, 21] = 0  # bonus
     np.testing.assert_array_equal(board2.points, expected, "Are there bonus points?")
 
 
+def test_game_points_local():
+    pass
+
+
 def test_game_board_eq():
-    board1 = _game.GameBoard([(1, C("9♦"))], [(1, 80, "♦")])
-    board2 = _game.GameBoard([(1, C("9d"))], [(1, 80, "♦")])
-    board3 = _game.GameBoard([(1, C("9h"))], [(1, 80, "♦")])
+    board1 = _game.GameBoard([(1, "9♦")], [(1, 80, "♦")])
+    board2 = _game.GameBoard([(1, "9d")], [(1, 80, "♦")])
+    board3 = _game.GameBoard([(1, "9h")], [(1, 80, "♦")])
     board1.assert_equal(board2)
     np.testing.assert_raises(AssertionError, board1.assert_equal, board3)
 
 
 def test_board_dump_and_load():
-    cards = [C(v + s) for v in _deck.VALUES for s in _deck.SUITS]
+    cards = [v + s for v in _deck.VALUES for s in _deck.SUITS]
     board1 = _game.GameBoard([(k % 4, c) for k, c in enumerate(cards)], [(1, 80, "♦")])
     with tempfile.TemporaryDirectory() as tmp:
         filepath = Path(tmp) / "board_dump_and_load_test.json"
@@ -94,8 +98,7 @@ class GameTests(TestCase):
         played_cards = list(self.played_cards)  # duplicate the list
         for index, value in changes:
             played_cards[index] = value
-        played_cards = [(p, C(c)) for p, c in played_cards]
-        board = _game.GameBoard(played_cards, (0, 80, trump_suit))
+        board = _game.GameBoard(played_cards, [(0, 80, trump_suit)])
         if not expected:
             board.assert_valid()
         else:
@@ -113,9 +116,8 @@ class GameTests(TestCase):
         second_of_second=(5, [4]),
     )
     def test_get_last_round(self, index, expected_inds):
-        played_cards = [(p, C(c)) for p, c in self.played_cards[:index]]
-        board = _game.GameBoard(played_cards, (0, 80, "❤"))
-        expected = _deck.CardList([played_cards[i][1] for i in expected_inds], "❤")
+        board = _game.GameBoard(self.played_cards[:index], [(0, 80, "❤")])
+        expected = _deck.CardList([self.played_cards[i][1] for i in expected_inds], "❤")
         output = board.get_current_round_cards()
         output.assert_equal(expected)
 
