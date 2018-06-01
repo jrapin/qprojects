@@ -60,6 +60,13 @@ def test_full_deck_and_cardlist_as_array():
     np.testing.assert_array_equal(deck.as_array(), [1 for _ in range(32)])
 
 
+def test_global_index():
+    np.random.seed()
+    global_index = np.random.randint(32)
+    card = _deck.Card.from_global_index(global_index)
+    np.testing.assert_equal(card.global_index, global_index, err_msg="Card does not match global_index")
+
+
 @genty.genty
 class DeckTests(TestCase):
 

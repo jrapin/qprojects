@@ -27,6 +27,7 @@ class DefaultPlayer:
         self._order = None
         self._card_played_count = 0
         self._erroneous_selection_count = 0
+        self._last_playable_cards = None
         self.reward_sum = 0
 
     def get_acceptation_ratio(self):
@@ -86,11 +87,12 @@ class DefaultPlayer:
         This function makes sure the sent card is acceptable to play. It keeps tracks of remaining
         cards, and of how often the propositions (from a neural network for instance) where accepted.
         Propositions are provided through the "_propose_card_to_play" method.
+        The playable cards at this round are kept for later use in set_reward.
         """
         selected = self._propose_card_to_play(board)
-        playable = self._get_playable_cards(board)
-        if selected is None or selected not in playable:
-            selected = np.random.choice(playable)
+        self._last_playable_cards = self._get_playable_cards(board)
+        if selected is None or selected not in self._last_playable_cards:
+            selected = np.random.choice(self._last_playable_cards)
             self._erroneous_selection_count += 1
         self._cards.remove(selected)
         self._card_played_count += 1
@@ -106,6 +108,11 @@ class DefaultPlayer:
             the current board for the game
         value: int
             the value of the reward
+
+        Note
+        ----
+        This function is called after *each* action (from any player), while get_card_to_play method
+        is only called when it is the user's time to play.
         """
         self.reward_sum += value
 
@@ -127,6 +134,35 @@ class DefaultPlayer:
         Implement a technique here.
         """
         pass
+
+
+class NetworkPlayer(DefaultPlayer):
+
+    def __init__(self, network):
+        super().__init__()
+        self._network = network
+        self._representation = None
+        self._last_update_step = None
+
+    def initialize_game(self, order, cards):
+        super().initialize_game(order, cards)
+        # representation: (32 card played +  1 initial cards + 1 trump and order) x 32 cards
+        self._representation = np.zeros((34, 32))
+        self._representation[32, order] = 1
+        self._representation[33, :] = self._initial_cards.as_array()
+        self._last_update_step = 0
+
+    def _update_representation(self, board):
+        self._representation[32, 4 + _deck.SUITS.order(board.trump)] = 1
+        for k, action in board.actions[self._last_update_step:]:
+            self._representation[k + self._last_update_step, action[1].global_index] = 1
+        self._last_update_step = len(board.actions)
+
+    def _propose_card_to_play(self, board):
+        self._update_representation(board)
+        output = self._nework.predict(self._representation)
+        index = np.argmax(output[:32])
+        return _deck.Card.from_global_index(index)
 
 
 def initialize_players_cards(players):

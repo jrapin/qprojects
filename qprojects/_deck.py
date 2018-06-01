@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*
 import itertools
 import collections
 import numpy as np
@@ -49,6 +48,11 @@ class Card:
         if self._global_index is None:
             self._global_index = 8 * SUITS.index(self.suit) + VALUES.index(self.value)
         return self._global_index
+
+    @classmethod
+    def from_global_index(cls, index):
+        suit, value = divmod(index, 8)
+        return cls(VALUES[value] + SUITS[suit])
 
     @property
     def tag(self):
