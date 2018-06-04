@@ -1,4 +1,5 @@
 import numpy as np
+from keras import backend as K
 from . import _deck
 from . import _game
 
@@ -58,3 +59,20 @@ def prepare_learning_output(playable_cards, played_card, value):
         output[:, 0] = -100
         output[played_card.global_index, 0] = value
     return output
+
+
+def weighted_mean_squared_error(y_true, y_pred):
+    """Mean squared error with weights
+
+    Parameters
+    ----------
+    y_true: tensor
+        [bach x outputs x 2] tensor of values (first of two index of last dimension) and masks (second)
+    y_pred: tensor
+        [batch x outputs] tensor of prediction
+    """
+    assert y_true.get_shape()[-1] == 2, "Wrong shape for y_true: {}".format(y_true.get_shape())
+    y_true_values = y_true[:, :, 0]
+    y_true_mask = y_true[:, :, 1]
+    masked_output = (y_pred - y_true_values) * y_true_mask
+    return K.mean(K.square(masked_output), axis=-1)
