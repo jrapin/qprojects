@@ -5,6 +5,19 @@ import numpy as np
 from . import _utils
 
 
+@_utils.singleton
+class ExampleSingleton:
+    """A singleton for testing
+    """
+    pass
+
+
+def test_singleton():
+    sing1 = ExampleSingleton()
+    sing2 = ExampleSingleton()
+    np.testing.assert_equal(sing1, sing2)
+
+
 @genty.genty
 class UtilsTests(TestCase):
 

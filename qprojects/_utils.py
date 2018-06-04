@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*
 import itertools
+import functools
 
 
 def assert_set_equal(estimate, reference):
@@ -36,3 +37,19 @@ def grouper(iterable, n, fillvalue=None):
     # this code is copied from itertools recipes
     args = [iter(iterable)] * n
     return itertools.zip_longest(fillvalue=fillvalue, *args)
+
+
+class singleton:
+    """Singleton decorator
+    """
+
+    _SINGLETONS = {}
+
+    def __init__(self, cls):
+        self._cls = cls
+        functools.update_wrapper(self, cls)
+
+    def __call__(self, *args, **kwargs):
+        if self._cls not in self._SINGLETONS:
+            self._SINGLETONS[self._cls] = self._cls(*args, **kwargs)
+        return self._SINGLETONS
