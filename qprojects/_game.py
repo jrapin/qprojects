@@ -136,35 +136,6 @@ class DefaultPlayer:
         pass
 
 
-class NetworkPlayer(DefaultPlayer):
-
-    def __init__(self, network):
-        super().__init__()
-        self._network = network
-        self._representation = None
-        self._last_update_step = None
-
-    def initialize_game(self, order, cards):
-        super().initialize_game(order, cards)
-        # representation: (32 card played +  1 initial cards + 1 trump and order) x 32 cards
-        self._representation = np.zeros((34, 32))
-        self._representation[32, order] = 1
-        self._representation[33, :] = self._initial_cards.as_array()
-        self._last_update_step = 0
-
-    def _update_representation(self, board):
-        self._representation[32, 4 + _deck.SUITS.order(board.trump)] = 1
-        for k, action in board.actions[self._last_update_step:]:
-            self._representation[k + self._last_update_step, action[1].global_index] = 1
-        self._last_update_step = len(board.actions)
-
-    def _propose_card_to_play(self, board):
-        self._update_representation(board)
-        output = self._nework.predict(self._representation)
-        index = np.argmax(output[:32])
-        return _deck.Card.from_global_index(index)
-
-
 def initialize_players_cards(players):
     """Initialize players for a new game.
     This function sets the player order and its cards.
