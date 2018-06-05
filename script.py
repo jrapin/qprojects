@@ -3,10 +3,8 @@ import numpy as np
 import qprojects
 
 
-network = qprojects.BasicNetwork(model_filepath="basic_network_last.h5", verbose=0)
+network = qprojects.BasicNetwork(model_filepath="basic_network_last_43.h5", verbose=0, learning_rate=0.00001)
 players = [qprojects.NetworkPlayer(network) for _ in range(4)]
-for p in players:
-    p.reinitialize()
 
 
 def play_a_game(players, verbose=False):
@@ -16,14 +14,28 @@ def play_a_game(players, verbose=False):
     return board
 
 
-board = play_a_game(players, verbose=False)
-
-for k in range(20000):
+k = 0
+for p in players:
+    p.reinitialize()
+while True:
+    k = k + 1
     print("#{}".format(k))
     board = play_a_game(players, verbose=False)
     print("Acceptation ratio: {}".format(players[0].get_instantaneous_acceptation_ratio()))
 
-del network
 
+index = 26
+data = network._queue._data[-index]
+print(data[1])
+output = network.predict(data[0])[:, None]
+print(output)
 
 network._queue.get_random_selection(15)
+
+
+# network._model.save("basic_network_last_89.h5")
+
+
+# TODO: look at cost function (verbose=1)
+# TODO: predict playable
+# TODO: look at outputs

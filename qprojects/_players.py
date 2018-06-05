@@ -38,18 +38,22 @@ class NetworkPlayer(_game.DefaultPlayer):
     def set_reward(self, board, value):
         previous_representation = np.array(self._representation, copy=True)
         self._update_representation(board)
-        value = max(0, np.max(self._network.predict(self._representation)))
-        if self._last_playable_cards is None:
-            expected = prepare_learning_output(None, None, value)
-        else:
-            last_player, last_card = board.actions[-1]
-            assert last_player == self._order
-            expected = prepare_learning_output(self._last_playable_cards, last_card, value)
-            self._last_playable_cards = None
-        self._network.train(previous_representation, expected)
+        if np.random.rand() < .5:
+            value = min(250, value + max(np.max(self._network.predict(self._representation)), 0))
+            proba = 1.
+            if self._last_playable_cards is None:
+                expected = prepare_learning_output(None, None, value)
+                proba /= 3
+            else:
+                last_player, last_card = board.actions[-1]
+                assert last_player == self._order
+                expected = prepare_learning_output(self._last_playable_cards, last_card, value)
+            if np.random.rand() < proba:
+                self._network.train(previous_representation, expected)
+        self._last_playable_cards = None
 
 
-def prepare_learning_output(playable_cards, played_card, value, value_weight=5):
+def prepare_learning_output(playable_cards, played_card, value, value_weight=6):
     """ 33x2 (32 cards + 1 unplayed) x (value and mask)
     """
     output = np.ones((33, 2))
@@ -57,7 +61,7 @@ def prepare_learning_output(playable_cards, played_card, value, value_weight=5):
         assert played_card is None
         output[:, 0] = -100
         output[-1, 0] = value
-        output[-1, 1] = value_weight
+        output[-1, 1] = value_weight / 4.
     else:
         playable_cards = _deck.CardList((c for c in playable_cards if c != played_card))
         output[:32, 1] -= playable_cards.as_array()
@@ -82,6 +86,9 @@ def weighted_mean_squared_error(y_true, y_pred):
     y_true_weights = y_true[:, :, 1]
     weighted_output = (y_pred_values - y_true_values) * y_true_weights
     return K.mean(K.square(weighted_output), axis=-1)
+
+
+keras.losses.weighted_mean_squared_error = weighted_mean_squared_error
 
 
 def make_final_activation(layer):
@@ -120,7 +127,7 @@ def make_basic_model(input_shape):
 @_utils.singleton
 class BasicNetwork:
 
-    def __init__(self, queue_size=1000, batch_size=16, verbose=0, model_filepath=None):
+    def __init__(self, queue_size=1000, batch_size=16, verbose=0, model_filepath=None, learning_rate=0.00001):  # pylint: disable=too-many-arguments
         self._batch_size = batch_size
         self._verbose = verbose
         self._queue = _utils.ReplayQueue(queue_size)
@@ -128,17 +135,18 @@ class BasicNetwork:
             self._model = make_basic_model(input_shape=(35, 32))
         else:
             self._model = keras.models.load_model(model_filepath)
-        optimizer = keras.optimizers.RMSprop(lr=0.00001, rho=0.9, epsilon=1e-08, decay=0.0)
+        #optimizer = keras.optimizers.RMSprop(lr=learning_rate, rho=0.9, epsilon=1e-08, decay=0.0)
+        optimizer = keras.optimizers.SGD(lr=learning_rate)
         self._model.compile(loss=weighted_mean_squared_error, optimizer=optimizer)
 
     def predict(self, representation):
         return self._model.predict(representation[None, :, :])[0, :, 0]
 
     def train(self, representation, expected):
-        batch_data = [(representation, expected)] + self._queue.get_random_selection(self._batch_size - 1)
+        self._queue.append((representation, expected))
+        batch_data = self._queue.get_random_selection(self._batch_size)
         batch_representation, batch_expected = (np.array(x) for x in zip(*batch_data))
         self._model.fit(batch_representation, batch_expected, batch_size=self._batch_size, epochs=1, verbose=self._verbose)
-        self._queue.append((representation, expected))
 
     def __del__(self):
         self._model.save("basic_network_last.h5")
