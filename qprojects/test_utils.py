@@ -46,3 +46,14 @@ class UtilsTests(TestCase):
     def test_grouper(self, iterator, n, fillvalue, expected):
         output = list(_utils.grouper(iterator, n, fillvalue))
         np.testing.assert_array_equal(output, expected)
+
+
+def test_replay_queue():
+    queue = _utils.ReplayQueue(3)
+    for k in range(7):
+        queue.append((k, k))
+    _ = str(queue)
+    np.testing.assert_array_equal(queue._data, [(6, 6), (4, 4), (5, 5)])
+    np.random.seed(25)
+    np.testing.assert_equal(queue.get_random_selection(2), [(4, 4), (5, 5)])
+    np.testing.assert_equal(queue.get_random_selection(5), [(6, 6), (4, 4), (5, 5)])

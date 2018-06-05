@@ -9,7 +9,7 @@ from . import _utils
 _BONUS_CARDS = {_deck.Card(c) for c in ["Qh", "Kh"]}
 
 
-class DefaultPlayer:
+class DefaultPlayer:  # pylint: disable=too-many-instance-attributes
     """Player which selects one card randomly at each round.
 
     Note
@@ -28,12 +28,23 @@ class DefaultPlayer:
         self._card_played_count = 0
         self._erroneous_selection_count = 0
         self._last_playable_cards = None
+        self._acceptation_queue = _utils.ReplayQueue(1000)
         self.reward_sum = 0
+
+    def reinitialize(self):
+        self._cards = _deck.CardList([])
+        self._initial_cards = _deck.CardList([])  # keep a record of initial cards for each game
+        self._order = None
 
     def get_acceptation_ratio(self):
         """Ratio of card proposition which have been accepted (allowed to play)
         """
         return (self._card_played_count - self._erroneous_selection_count) / self._card_played_count
+
+    def get_instantaneous_acceptation_ratio(self):
+        """Ratio of card proposition which have been accepted (allowed to play)
+        """
+        return np.mean(self._acceptation_queue._data)
 
     @property
     def cards(self):
@@ -94,6 +105,9 @@ class DefaultPlayer:
         if selected is None or selected not in self._last_playable_cards:
             selected = np.random.choice(self._last_playable_cards)
             self._erroneous_selection_count += 1
+            self._acceptation_queue.append(False)
+        else:
+            self._acceptation_queue.append(True)
         self._cards.remove(selected)
         self._card_played_count += 1
         return selected

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*
 import itertools
 import functools
+import numpy as np
 
 
 def assert_set_equal(estimate, reference):
@@ -52,4 +53,33 @@ class singleton:
     def __call__(self, *args, **kwargs):
         if self._cls not in self._SINGLETONS:
             self._SINGLETONS[self._cls] = self._cls(*args, **kwargs)
-        return self._SINGLETONS
+        return self._SINGLETONS[self._cls]
+
+
+class ReplayQueue:
+
+    def __init__(self, max_len=100):
+        self._data = []
+        self._max_len = max_len
+        self._index = 0
+
+    def append(self, value):
+        if len(self._data) == self._max_len:
+            self._data[self._index] = value
+            self._index = (self._index + 1) % self._max_len
+        else:
+            self._data.append(value)
+
+    def __len__(self):
+        return len(self._data)
+
+    def get_random_selection(self, size):
+        if len(self) < size:
+            return list(self._data)
+        else:
+            # needs to be robust to list of tuples
+            indices = np.random.choice(len(self._data), size=size, replace=False)
+            return [self._data[i] for i in indices]
+
+    def __repr__(self):
+        return "ReplayQueue({}): index {}, data {}".format(self._max_len, self._index, self._data)
