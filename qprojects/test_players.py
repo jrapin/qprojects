@@ -8,10 +8,10 @@ from ._deck import CardList as CL
 
 def test_prepare_learning_output_unplayed():
     value = 12
-    output = _players.prepare_learning_output(playable_cards=None, played_card=None, value=value)
+    output = _players.prepare_learning_output(playable_cards=None, played_card=None, value=value, value_weight=5)
     expected_values = [-100] * 32 + [value]
     np.testing.assert_array_equal(output[:, 0], expected_values)
-    expected_mask = [1] * 32 + [5]
+    expected_mask = [1] * 32 + [1.25]
     np.testing.assert_array_equal(output[:, 1], expected_mask)
     # errors
     np.testing.assert_raises(TypeError, _players.prepare_learning_output, C("Qh"), None, value)
@@ -20,7 +20,7 @@ def test_prepare_learning_output_unplayed():
 
 def test_prepare_learning_output_played():
     value = 12
-    output = _players.prepare_learning_output(playable_cards=CL(["7h", "8h"]), played_card=C("7h"), value=value)
+    output = _players.prepare_learning_output(playable_cards=CL(["7h", "8h"]), played_card=C("7h"), value=value, value_weight=5)
     expected_values = [value] + [-100] * 32
     np.testing.assert_array_equal(output[:, 0], expected_values)
     expected_mask = [5, 0] + [1] * 31
