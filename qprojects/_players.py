@@ -31,7 +31,8 @@ class NetworkPlayer(_game.DefaultPlayer):
 
     def _get_expectations(self, board):
         self._update_representation(board)
-        return self._network.predict(self._representation)
+        output = self._network.predict(self._representation)
+        return PlayabilityOutput.prepare_expectations(output)
 
     def _propose_card_to_play(self, board):
         output = self._get_expectations(board)
@@ -42,15 +43,16 @@ class NetworkPlayer(_game.DefaultPlayer):
         previous_representation = np.array(self._representation, copy=True)
         self._update_representation(board)
         if np.random.rand() < .5:
-            value = min(250, value + max(np.max(self._network.predict(self._representation)), 0))
+            expectations = self._get_expectations(board)
+            value = min(250, value + max(np.max(expectations), 0))
             proba = 1.
             if self._last_playable_cards is None:
-                expected = prepare_learning_output(None, None, value)
+                expected = PlayabilityOutput.make_playability_reference(None, None, value)
                 proba /= 3
             else:
                 last_player, last_card = board.actions[-1]
                 assert last_player == self._order
-                expected = prepare_learning_output(self._last_playable_cards, last_card, value)
+                expected = PlayabilityOutput.make_playability_reference(self._last_playable_cards, last_card, value)
             if np.random.rand() < proba:
                 self._network.train(previous_representation, expected)
         self._last_playable_cards = None
@@ -91,9 +93,6 @@ def weighted_mean_squared_error(y_true, y_pred):
     return K.mean(K.square(weighted_output), axis=-1)
 
 
-keras.losses.weighted_mean_squared_error = weighted_mean_squared_error
-
-
 def make_final_activation(layer):
     output = keras.layers.LeakyReLU(alpha=0.02)(layer)
     output = keras.layers.Lambda(lambda x: x[:, :, None] - 100)(output)
@@ -108,6 +107,7 @@ class PlayabilityOutput:
         """
         playabilities = keras.layers.Dense(33, activation="sigmoid")(layer)
         values = keras.layers.Dense(33, activation="relu")(layer)
+        values = keras.layers.LeakyReLU(alpha=0.01)(values)
         playabilities = keras.layers.Lambda(lambda x: x[:, :, None])(playabilities)
         values = keras.layers.Lambda(lambda x: x[:, :, None])(values)
         return keras.layers.concatenate([playabilities, values], axis=2)
@@ -130,7 +130,7 @@ class PlayabilityOutput:
         mask = K.cast(K.greater(y_true_values, -1), 'float32')
         masked_values_error = (y_pred_values - y_true_values) * mask
         values_error = K.sum(K.square(masked_values_error), axis=-1)
-        acceptabilities_error = K.sum(K.binary_crossentropy(y_true_playabilities, y_pred_playabilities), axis=-1)
+        acceptabilities_error = 100 * K.sum(K.binary_crossentropy(y_true_playabilities, y_pred_playabilities), axis=-1)
         return values_error + acceptabilities_error
 
     @staticmethod
@@ -145,8 +145,26 @@ class PlayabilityOutput:
             output[-1, 1] = value
         else:
             output[:32, 0] = playable_cards.as_array()
-            output[played_card.global_index, 1] = value
+            index = played_card.global_index
+            output[index, 1] = value
+            assert output[index, 0] == 1
         return output
+
+    @staticmethod
+    def prepare_expectations(net_output):
+        """Postprocess the network output so as to recover expectations,
+        with -1 for rejected cards, and max(0, value) for accepted cards.
+        """
+        rejected = net_output[:, 0] < 0.5
+        accepted = np.logical_not(rejected)
+        expectations = np.array(net_output[:, 1])
+        expectations[rejected] = -1
+        expectations[accepted] = np.maximum(expectations[accepted], 0)
+        return expectations
+
+
+keras.losses.weighted_mean_squared_error = weighted_mean_squared_error
+keras.losses.playability_error = PlayabilityOutput.playability_error
 
 
 def make_basic_model(input_shape):
@@ -168,10 +186,7 @@ def make_basic_model(input_shape):
     output = keras.layers.Dense(128, activation=None)(output)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
     output = keras.layers.Dropout(.1)(output)
-    output = keras.layers.Dense(33, activation=None)(output)
-    output = keras.layers.LeakyReLU(alpha=0.01)(output)
-    output = keras.layers.Dense(33, activation=None)(output)
-    output = make_final_activation(output)
+    output = PlayabilityOutput.make_final_playability_layer(output)
     model = keras.models.Model(input_data, output)
     return model
 
@@ -189,10 +204,13 @@ class BasicNetwork:
             self._model = keras.models.load_model(model_filepath)
         #optimizer = keras.optimizers.RMSprop(lr=learning_rate, rho=0.9, epsilon=1e-08, decay=0.0)
         optimizer = keras.optimizers.SGD(lr=learning_rate)
-        self._model.compile(loss=weighted_mean_squared_error, optimizer=optimizer)
+        self._model.compile(loss=PlayabilityOutput.playability_error, optimizer=optimizer)
 
     def predict(self, representation):
-        return self._model.predict(representation[None, :, :])[0, :, 0]
+        output = self._model.predict(representation[None, :, :])[0, :, :]
+        if np.any(np.isnan(output)):
+            raise RuntimeError("Nan values")
+        return output
 
     def train(self, representation, expected):
         self._queue.append((representation, expected))

@@ -64,14 +64,14 @@ class PlayabilityTests(TestCase):
 
     @genty.genty_dataset(
         correct_playability=(1, 4),
-        incorrect_playability=(0, 20.118),
+        incorrect_playability=(0, 1615.81),
     )
     def test_masked_mean_squared_error(self, acceptable, expected):
         y_pred = K.variable(np.array([[1, acceptable, 0], [10, 100, 1000]]).T[None, :, :])
         y_true = K.variable(np.array([[1, 1, 0], [12, -1, -1]]).T[None, :, :])
         np.testing.assert_array_equal(y_pred.get_shape(), [1, 3, 2])  # batch x output x (acceptabilities, values)
         loss = K.eval(_players.PlayabilityOutput.playability_error(y_true, y_pred))
-        np.testing.assert_almost_equal(loss, [expected], decimal=3)
+        np.testing.assert_almost_equal(loss, [expected], decimal=2)
 
     def test_make_final_playability_layer(self):
         y = K.variable(np.array([[110, 120, -100]]))
@@ -98,3 +98,9 @@ class PlayabilityTests(TestCase):
         np.testing.assert_array_equal(output[:, 0], expected_playable)
         expected_values = [value] + [-1] * 32
         np.testing.assert_array_equal(output[:, 1], expected_values)
+
+    def test_prepare_expectations(self):
+        net_output = np.array([[0, 1], [1, 4], [1, -1]])
+        expected = [-1, 4, 0]
+        output = _players.PlayabilityOutput.prepare_expectations(net_output)
+        np.testing.assert_array_equal(output, expected)

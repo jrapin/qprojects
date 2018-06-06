@@ -184,7 +184,7 @@ class CardList(list):
         if self.trump_suit is None:
             raise RuntimeError("Playable cards cannot be specified when trump_suit is not specified")
         if not round_cards:
-            return self
+            return CardList(self, self.trump_suit)  # copy to avoid border effects
         hand_cards_dict = collections.OrderedDict()
         for card in self:
             hand_cards_dict.setdefault(card.suit, []).append(card)
