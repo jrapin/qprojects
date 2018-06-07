@@ -5,6 +5,7 @@ from keras import backend as K
 from . import _utils
 from . import _deck
 from . import _game
+from . import _representations
 
 
 class NetworkPlayer(_game.DefaultPlayer):
@@ -12,27 +13,12 @@ class NetworkPlayer(_game.DefaultPlayer):
     def __init__(self, network):
         super().__init__()
         self._network = network
-        self._representation = None
-        self._last_update_step = None
-
-    def initialize_game(self, order, cards):
-        super().initialize_game(order, cards)
-        # representation: (1 initial cards + 1 order + 1 trump + 32 played cards) x 32 cards
-        self._representation = np.zeros((35, 32))
-        self._representation[0, :] = self._initial_cards.as_array()
-        self._representation[1, order] = 1
-        self._last_update_step = 0
-
-    def _update_representation(self, board):
-        self._representation[2, _deck.SUITS.index(board.trump_suit)] = 1
-        for k, action in enumerate(board.actions[self._last_update_step:]):
-            self._representation[3 + k + self._last_update_step, action[1].global_index] = 1
-        self._last_update_step = len(board.actions)
+        self._last_representation = None
 
     def _get_expectations(self, board):
-        self._update_representation(board)
-        output = self._network.predict(self._representation)
-        return PlayabilityOutput.prepare_expectations(output)
+        representation = self._network.representation.create(board, self)
+        output = self._network.predict(representation)
+        return PenaltyOutput.prepare_expectations(output)
 
     def _propose_card_to_play(self, board):
         output = self._get_expectations(board)
@@ -40,69 +26,75 @@ class NetworkPlayer(_game.DefaultPlayer):
         return _deck.Card.from_global_index(index)
 
     def set_reward(self, board, value):
-        previous_representation = np.array(self._representation, copy=True)
-        self._update_representation(board)
-        if np.random.rand() < .5:
-            expectations = self._get_expectations(board)
-            value = min(250, value + max(np.max(expectations), 0))
-            proba = 1.
-            if self._last_playable_cards is None:
-                expected = PlayabilityOutput.make_playability_reference(None, None, value)
-                proba /= 3
-            else:
-                last_player, last_card = board.actions[-1]
-                assert last_player == self._order
-                expected = PlayabilityOutput.make_playability_reference(self._last_playable_cards, last_card, value)
-            if np.random.rand() < proba:
+        last_player, last_card = board.actions[-1]
+        if np.random.rand() < .3:
+            value = min(250, value + max(np.max(self._get_expectations(board)), 0))
+            previous_representation = self._network.representation.create(board, self, no_last=True)
+            if last_player == self.order:
+                expected = PenaltyOutput.make_reference(self._last_playable_cards, last_card, value)
                 self._network.train(previous_representation, expected)
-        self._last_playable_cards = None
+            elif np.random.rand() < .25:
+                expected = PenaltyOutput.make_reference(None, None, value)
+                self._network.train(previous_representation, expected)
 
 
-def prepare_learning_output(playable_cards, played_card, value, value_weight=6):
-    """ 33x2 (32 cards + 1 unplayed) x (value and mask)
-    """
-    output = np.ones((33, 2))
-    if playable_cards is None:
-        assert played_card is None
-        output[:, 0] = -100
-        output[-1, 0] = value
-        output[-1, 1] = value_weight / 4.
-    else:
-        playable_cards = _deck.CardList((c for c in playable_cards if c != played_card))
-        output[:32, 1] -= playable_cards.as_array()
-        output[:, 0] = -100
-        output[played_card.global_index, 0] = value
-        output[played_card.global_index, 1] = value_weight
-    return output
+class PenaltyOutput:
 
+    @staticmethod
+    def make_reference(playable_cards, played_card, value, value_weight=6):
+        """ 33x2 (32 cards + 1 unplayed) x (value and mask)
+        """
+        output = np.ones((33, 2))
+        if playable_cards is None:
+            assert played_card is None
+            output[:, 0] = -100
+            output[-1, 0] = value
+            output[-1, 1] = value_weight / 4.
+        else:
+            playable_cards = _deck.CardList((c for c in playable_cards if c != played_card))
+            output[:32, 1] -= playable_cards.as_array()
+            output[:, 0] = -100
+            output[played_card.global_index, 0] = value
+            output[played_card.global_index, 1] = value_weight
+        return output
 
-def weighted_mean_squared_error(y_true, y_pred):
-    """Mean squared error with weights
+    @staticmethod
+    def error(y_true, y_pred):
+        """Mean squared error with weights
 
-    Parameters
-    ----------
-    y_true: tensor
-        [bach x outputs x 2] tensor of values (first of two index of last dimension) and masks (second)
-    y_pred: tensor
-        [batch x outputs] tensor of prediction
-    """
-    y_pred_values = y_pred[:, :, 0]
-    y_true_values = y_true[:, :, 0]
-    y_true_weights = y_true[:, :, 1]
-    weighted_output = (y_pred_values - y_true_values) * y_true_weights
-    return K.mean(K.square(weighted_output), axis=-1)
+        Parameters
+        ----------
+        y_true: tensor
+            [bach x outputs x 2] tensor of values (first of two index of last dimension) and masks (second)
+        y_pred: tensor
+            [batch x outputs] tensor of prediction
+        """
+        y_pred_values = y_pred[:, :, 0]
+        y_true_values = y_true[:, :, 0]
+        y_true_weights = y_true[:, :, 1]
+        weighted_output = (y_pred_values - y_true_values) * y_true_weights
+        return K.mean(K.square(weighted_output), axis=-1)
 
+    @staticmethod
+    def _make_final_activation(layer):
+        output = keras.layers.LeakyReLU(alpha=0.02)(layer)
+        output = keras.layers.Lambda(lambda x: x[:, :, None] - 100)(output)
+        return keras.layers.concatenate([output, output], axis=2)
 
-def make_final_activation(layer):
-    output = keras.layers.LeakyReLU(alpha=0.02)(layer)
-    output = keras.layers.Lambda(lambda x: x[:, :, None] - 100)(output)
-    return keras.layers.concatenate([output, output], axis=2)
+    @staticmethod
+    def make_final_layer(layer):
+        output = keras.layers.Dense(33, activation=None)(layer)
+        return PenaltyOutput._make_final_activation(output)
+
+    @staticmethod
+    def prepare_expectations(data):
+        return data[:, 0]
 
 
 class PlayabilityOutput:
 
     @staticmethod
-    def make_final_playability_layer(layer):
+    def make_final_layer(layer):
         """new layer predicting acceptatbilities and values
         """
         playabilities = keras.layers.Dense(33, activation="sigmoid")(layer)
@@ -110,10 +102,11 @@ class PlayabilityOutput:
         values = keras.layers.LeakyReLU(alpha=0.01)(values)
         playabilities = keras.layers.Lambda(lambda x: x[:, :, None])(playabilities)
         values = keras.layers.Lambda(lambda x: x[:, :, None])(values)
+        values = keras.layers.Multiply()([playabilities, values])
         return keras.layers.concatenate([playabilities, values], axis=2)
 
     @staticmethod
-    def playability_error(y_true, y_pred):
+    def error(y_true, y_pred):
         """Error mixing a crossentropy for playability classification and squared error for the expectation value
 
         Parameters
@@ -134,17 +127,17 @@ class PlayabilityOutput:
         return values_error + acceptabilities_error
 
     @staticmethod
-    def make_playability_reference(playable_cards, played_card, value):
+    def make_reference(playable_cards, played_card, value):
         """ 33x2 (32 cards + 1 unplayed) x (value and mask)
         """
         output = np.zeros((33, 2))
-        output[:, 1] = -1
         if playable_cards is None:
             assert played_card is None
             output[-1, 0] = 1
             output[-1, 1] = value
         else:
             output[:32, 0] = playable_cards.as_array()
+            output[output[:, 0] > 0, 1] = -1
             index = played_card.global_index
             output[index, 1] = value
             assert output[index, 0] == 1
@@ -163,17 +156,12 @@ class PlayabilityOutput:
         return expectations
 
 
-keras.losses.weighted_mean_squared_error = weighted_mean_squared_error
-keras.losses.playability_error = PlayabilityOutput.playability_error
-
-
-def make_basic_model(input_shape):
-    input_data = keras.layers.Input(shape=input_shape)
-    output = keras.layers.Flatten()(input_data)
-    output = keras.layers.Dense(1200, activation=None, use_bias=False)(output)  # sparse input (avoid using bias)
+def make_basic_network(input_layer):
+    output = keras.layers.Flatten()(input_layer)
+    output = keras.layers.Dense(1300, activation=None, use_bias=False)(output)  # sparse input (avoid using bias)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
     output = keras.layers.Dropout(.1)(output)
-    output = keras.layers.Dense(1200, activation=None)(output)
+    output = keras.layers.Dense(1300, activation=None)(output)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
     output = keras.layers.Dropout(.1)(output)
     output = keras.layers.Dense(1024, activation=None)(output)
@@ -181,33 +169,33 @@ def make_basic_model(input_shape):
     output = keras.layers.Dropout(.1)(output)
     output = keras.layers.Dense(512, activation=None)(output)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
-    output = keras.layers.Dropout(.1)(output)
-    output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    output = keras.layers.Dropout(.05)(output)
     output = keras.layers.Dense(128, activation=None)(output)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
-    output = keras.layers.Dropout(.1)(output)
-    output = PlayabilityOutput.make_final_playability_layer(output)
-    model = keras.models.Model(input_data, output)
-    return model
+    return output
 
 
-@_utils.singleton
 class BasicNetwork:
+
+    representation = _representations.ExplicitRepresentation
+    output_framework = PenaltyOutput
 
     def __init__(self, queue_size=1000, batch_size=16, verbose=0, model_filepath=None, learning_rate=0.00001):  # pylint: disable=too-many-arguments
         self._batch_size = batch_size
         self._verbose = verbose
         self._queue = _utils.ReplayQueue(queue_size)
         if model_filepath is None or not os.path.exists(model_filepath):
-            self._model = make_basic_model(input_shape=(35, 32))
+            input_data = keras.layers.Input(shape=self.representation.shape)
+            temp = make_basic_network(input_data)
+            output = self.output_framework.make_final_layer(temp)
+            self.model = keras.models.Model(input_data, output)
         else:
-            self._model = keras.models.load_model(model_filepath)
-        #optimizer = keras.optimizers.RMSprop(lr=learning_rate, rho=0.9, epsilon=1e-08, decay=0.0)
+            self.model = keras.models.load_model(model_filepath, custom_objects={"error", self.output_framework.error})
         optimizer = keras.optimizers.SGD(lr=learning_rate)
-        self._model.compile(loss=PlayabilityOutput.playability_error, optimizer=optimizer)
+        self.model.compile(loss=self.output_framework.error, optimizer=optimizer)
 
     def predict(self, representation):
-        output = self._model.predict(representation[None, :, :])[0, :, :]
+        output = self.model.predict(representation[None, :, :])[0, :, :]
         if np.any(np.isnan(output)):
             raise RuntimeError("Nan values")
         return output
@@ -216,7 +204,4 @@ class BasicNetwork:
         self._queue.append((representation, expected))
         batch_data = self._queue.get_random_selection(self._batch_size)
         batch_representation, batch_expected = (np.array(x) for x in zip(*batch_data))
-        self._model.fit(batch_representation, batch_expected, batch_size=self._batch_size, epochs=1, verbose=self._verbose)
-
-    def __del__(self):
-        self._model.save("basic_network_last.h5")
+        self.model.fit(batch_representation, batch_expected, batch_size=self._batch_size, epochs=1, verbose=self._verbose)

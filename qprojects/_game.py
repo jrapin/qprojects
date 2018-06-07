@@ -33,6 +33,7 @@ class DefaultPlayer:  # pylint: disable=too-many-instance-attributes
 
     def reinitialize(self):
         self._cards = _deck.CardList([])
+        self._last_playable_cards = None
         self._initial_cards = _deck.CardList([])  # keep a record of initial cards for each game
         self._order = None
 
@@ -45,6 +46,14 @@ class DefaultPlayer:  # pylint: disable=too-many-instance-attributes
         """Ratio of card proposition which have been accepted (allowed to play)
         """
         return np.mean(self._acceptation_queue._data)
+
+    @property
+    def initial_cards(self):
+        return self._initial_cards
+
+    @property
+    def order(self):
+        return self._order
 
     @property
     def cards(self):
@@ -103,6 +112,7 @@ class DefaultPlayer:  # pylint: disable=too-many-instance-attributes
         selected = self._propose_card_to_play(board)
         self._last_playable_cards = self._get_playable_cards(board)
         if selected is None or selected not in self._last_playable_cards:
+            #print(np.round(self._get_expectations(board)), len(board.actions))
             selected = np.random.choice(self._last_playable_cards)
             self._erroneous_selection_count += 1
             self._acceptation_queue.append(False)
