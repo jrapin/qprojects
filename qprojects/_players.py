@@ -8,33 +8,31 @@ from . import _game
 from . import _representations
 
 
-class NetworkPlayer(_game.DefaultPlayer):
+class IntelligentPlayer(_game.DefaultPlayer):
 
     def __init__(self, network):
         super().__init__()
         self._network = network
-        self._last_representation = None
 
-    def _get_expectations(self, board):
+    def get_model_prediction(self, board):
         representation = self._network.representation.create(board, self)
-        output = self._network.predict(representation)
-        return PenaltyOutput.prepare_expectations(output)
+        return self._network.predict(representation)
 
     def _propose_card_to_play(self, board):
-        output = self._get_expectations(board)
+        output = self.get_model_prediction(board)
         index = np.argmax(output[:32])
         return _deck.Card.from_global_index(index)
 
     def set_reward(self, board, value):
         last_player, last_card = board.actions[-1]
         if np.random.rand() < .3:
-            value = min(250, value + max(np.max(self._get_expectations(board)), 0))
+            value = min(250, value + max(np.max(self.get_model_prediction(board)), 0))
             previous_representation = self._network.representation.create(board, self, no_last=True)
             if last_player == self.order:
-                expected = PenaltyOutput.make_reference(self._last_playable_cards, last_card, value)
+                expected = self._network.output_framework.make_reference(self._last_playable_cards, last_card, value)
                 self._network.train(previous_representation, expected)
             elif np.random.rand() < .25:
-                expected = PenaltyOutput.make_reference(None, None, value)
+                expected = self._network.output_framework.make_reference(None, None, value)
                 self._network.train(previous_representation, expected)
 
 
@@ -98,8 +96,8 @@ class PlayabilityOutput:
         """new layer predicting acceptatbilities and values
         """
         playabilities = keras.layers.Dense(33, activation="sigmoid")(layer)
-        values = keras.layers.Dense(33, activation="relu")(layer)
-        values = keras.layers.LeakyReLU(alpha=0.01)(values)
+        values = keras.layers.Dense(33)(layer)
+        values = keras.layers.LeakyReLU(alpha=0.1)(values)
         playabilities = keras.layers.Lambda(lambda x: x[:, :, None])(playabilities)
         values = keras.layers.Lambda(lambda x: x[:, :, None])(values)
         values = keras.layers.Multiply()([playabilities, values])
@@ -122,8 +120,8 @@ class PlayabilityOutput:
         y_true_values = y_true[:, :, 1]
         mask = K.cast(K.greater(y_true_values, -1), 'float32')
         masked_values_error = (y_pred_values - y_true_values) * mask
-        values_error = K.sum(K.square(masked_values_error), axis=-1)
-        acceptabilities_error = 100 * K.sum(K.binary_crossentropy(y_true_playabilities, y_pred_playabilities), axis=-1)
+        values_error = K.mean(K.square(masked_values_error), axis=-1)
+        acceptabilities_error = 10000 * K.mean(K.binary_crossentropy(y_true_playabilities, y_pred_playabilities), axis=-1)
         return values_error + acceptabilities_error
 
     @staticmethod
@@ -172,25 +170,52 @@ def make_basic_network(input_layer):
     output = keras.layers.Dropout(.05)(output)
     output = keras.layers.Dense(128, activation=None)(output)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    output = keras.layers.Dropout(.05)(output)
+    output = keras.layers.Dense(128, activation=None)(output)
+    output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    return output
+
+
+def make_recurrent_network(input_layer):
+    meta_timepoints = 2
+    meta_data = keras.layers.Lambda(lambda x: x[:, :meta_timepoints, :])(input_layer)
+    time_data = keras.layers.Lambda(lambda x: x[:, meta_timepoints:, :])(input_layer)
+
+    meta_data = keras.layers.Flatten()(meta_data)
+    meta_data = keras.layers.Dense(64, activation=None, use_bias=False)(meta_data)  # sparse input (avoid using bias)
+    meta_data = keras.layers.LeakyReLU(alpha=0.3)(meta_data)
+    meta_data = keras.layers.Dense(16, activation='tanh')(meta_data)
+    #meta_data = keras.layers.LeakyReLU(alpha=0.3)(meta_data)
+    meta_data = keras.layers.RepeatVector(32)(meta_data)
+
+    output = keras.layers.Concatenate(2)([time_data, meta_data])
+
+    output = keras.layers.LSTM(64, activation=None, recurrent_activation="sigmoid", return_sequences=True)(output)
+    output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    output = keras.layers.LSTM(64, activation=None, recurrent_activation="sigmoid", return_sequences=True)(output)
+    output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    output = keras.layers.LSTM(64, activation=None, recurrent_activation="sigmoid", return_sequences=False)(output)
+    output = keras.layers.LeakyReLU(alpha=0.3)(output)
     return output
 
 
 class BasicNetwork:
 
     representation = _representations.ExplicitRepresentation
-    output_framework = PenaltyOutput
+    output_framework = PlayabilityOutput
+    #output_framework = PenaltyOutput
 
-    def __init__(self, queue_size=1000, batch_size=16, verbose=0, model_filepath=None, learning_rate=0.00001):  # pylint: disable=too-many-arguments
+    def __init__(self, queue_size=2000, batch_size=16, verbose=0, model_filepath=None, learning_rate=0.00001):  # pylint: disable=too-many-arguments
         self._batch_size = batch_size
-        self._verbose = verbose
+        self.verbose = verbose
         self._queue = _utils.ReplayQueue(queue_size)
         if model_filepath is None or not os.path.exists(model_filepath):
             input_data = keras.layers.Input(shape=self.representation.shape)
-            temp = make_basic_network(input_data)
+            temp = make_recurrent_network(input_data)
             output = self.output_framework.make_final_layer(temp)
             self.model = keras.models.Model(input_data, output)
         else:
-            self.model = keras.models.load_model(model_filepath, custom_objects={"error", self.output_framework.error})
+            self.model = keras.models.load_model(model_filepath, custom_objects={"error": self.output_framework.error})
         optimizer = keras.optimizers.SGD(lr=learning_rate)
         self.model.compile(loss=self.output_framework.error, optimizer=optimizer)
 
@@ -198,10 +223,20 @@ class BasicNetwork:
         output = self.model.predict(representation[None, :, :])[0, :, :]
         if np.any(np.isnan(output)):
             raise RuntimeError("Nan values")
-        return output
+        return self.output_framework.prepare_expectations(output)
 
     def train(self, representation, expected):
         self._queue.append((representation, expected))
         batch_data = self._queue.get_random_selection(self._batch_size)
         batch_representation, batch_expected = (np.array(x) for x in zip(*batch_data))
-        self.model.fit(batch_representation, batch_expected, batch_size=self._batch_size, epochs=1, verbose=self._verbose)
+        self.model.fit(batch_representation, batch_expected, batch_size=self._batch_size, epochs=1, verbose=self.verbose)
+
+    def fit(self, batch_size=16, epochs=100, shuffle=True):
+        batch_data = self._queue._data
+        batch_representation, batch_expected = (np.array(x) for x in zip(*batch_data))
+        X = np.array(batch_representation)
+        y = np.array(batch_expected)
+        thresh = int(0.9 * X.shape[0])
+        X_train, y_train = [x[:thresh, :, :] for x in (X, y)]
+        X_test, y_test = [x[thresh:, :, :] for x in (X, y)]
+        return self.model.fit(X_train, y_train, batch_size=batch_size, epochs=epochs, shuffle=shuffle, validation_data=(X_test, y_test))
