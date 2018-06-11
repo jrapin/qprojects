@@ -12,3 +12,4 @@ from ._game import DefaultPlayer
 from ._game import initialize_players_cards
 from ._game import play_game
 from ._game import GameBoard
+from ._utils import epoch_policy

@@ -83,3 +83,55 @@ class ReplayQueue:
 
     def __repr__(self):
         return "ReplayQueue({}): index {}, data {}".format(self._max_len, self._index, self._data)
+
+
+def epoch_policy(max_epoch=10, verbose=True):
+    """Coroutine serving as policy for the number of epoch to perform before creating more data.
+    The coroutine yields True if the validation loss is lower than the loss, or the validation loss
+    decreases. It stops after at most max_epoch epochs.
+
+    Parameters
+    ----------
+    max_epoch: int
+        maximum number of epoch to perform
+    verbose: bool
+        whether to print the reason the training is continuing
+
+    Receives
+    --------
+    tuple
+        a tuple of two floats: (loss, validation_loss)
+
+    Yields
+    ------
+    bool
+        whether to continue the training for another epoch.
+
+    Usage
+    -----
+    policy = epoch_policy(max_epoch=10)
+    cond = next(policy)  # prime the policy
+    while cond:
+        output = network.fit(epochs=1)
+        cond = policy.send((output.history['loss'][0], output.history['val_loss'][0]))
+
+    """
+    prev_val_loss = None
+    loss, val_loss = yield True
+    # check the types at the first round
+    assert isinstance(loss, (int, float)), "Wrong type for loss {}: {}".format(loss, type(loss))
+    assert isinstance(val_loss, (int, float)), "Wrong type for loss {}: {}".format(val_loss, type(val_loss))
+    for _ in range(max_epoch - 1):
+        reason = ""
+        if prev_val_loss is not None and prev_val_loss > val_loss:
+            reason = "Validation loss decreased"
+        elif val_loss < loss:
+            reason = "Validation loss is lower than loss."
+        if reason:
+            if verbose:
+                print(reason)
+            prev_val_loss = val_loss
+            loss, val_loss = yield True
+        else:
+            break
+    yield False

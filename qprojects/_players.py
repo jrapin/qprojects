@@ -154,6 +154,61 @@ class PlayabilityOutput:
         return expectations
 
 
+class SplitPlayabilityOutput(PlayabilityOutput):
+
+    @staticmethod
+    def make_final_layer(layer):
+        """new layer predicting acceptatbilities and values
+        """
+        playabilities = keras.layers.Dense(64, activation=None)(layer)
+        playabilities = keras.layers.LeakyReLU(alpha=.2)(playabilities)
+        playabilities = keras.layers.Dense(33, activation="sigmoid")(playabilities)
+        playabilities = keras.layers.Lambda(lambda x: x[:, :, None])(playabilities)
+        #
+        values = keras.layers.Dense(64, activation=None)(layer)
+        values = keras.layers.LeakyReLU(alpha=.2)(values)
+        values = keras.layers.Dense(33)(values)
+        values = keras.layers.LeakyReLU(alpha=0.02)(values)
+        values = keras.layers.Lambda(lambda x: x[:, :, None])(values)
+        return keras.layers.concatenate([playabilities, values], axis=2)
+
+    @staticmethod
+    def playability_error(y_true, y_pred):
+        """Error mixing a crossentropy for playability classification and squared error for the expectation value
+
+        Parameters
+        ----------
+        y_true: tensor
+            [bach x num cards x 2] tensor of playable cards and expectation value for the played card (-1 otherwise)
+        y_pred: tensor
+            [batch x num cards x 2] tensor of predicted playable cards and expectation values
+        """
+        y_pred_playabilities = y_pred[:, :, 0]
+        y_true_playabilities = y_true[:, :, 0]
+        y_pred_values = y_pred[:, :, 1]
+        y_true_values = y_true[:, :, 1]
+        mask = K.cast(K.greater(y_true_values, -1), 'float32')
+        masked_values_error = (y_pred_values - y_true_values) * mask
+        values_error = K.mean(K.square(masked_values_error), axis=-1)
+        acceptabilities_error = K.mean(K.binary_crossentropy(y_true_playabilities, y_pred_playabilities), axis=-1)
+        return values_error + (100**2) * acceptabilities_error
+
+    @staticmethod
+    def make_reference(playable_cards, played_card, value):
+        """ 33x2 (32 cards + 1 unplayed) x (value and mask)
+        """
+        output = np.zeros((33, 2))
+        output[:, 1] = -1
+        if playable_cards is None:
+            assert played_card is None
+            output[-1, 0] = 1
+            output[-1, 1] = value
+        else:
+            output[:32, 0] = playable_cards.as_array()
+            output[played_card.global_index, 1] = value
+        return output
+
+
 def make_basic_network(input_layer):
     output = keras.layers.Flatten()(input_layer)
     output = keras.layers.Dense(1300, activation=None, use_bias=False)(output)  # sparse input (avoid using bias)
@@ -177,6 +232,46 @@ def make_basic_network(input_layer):
 
 
 def make_recurrent_network(input_layer):
+    #meta_timepoints = 2
+    #meta_data = keras.layers.Lambda(lambda x: x[:, :meta_timepoints, :])(input_layer)
+    #time_data = keras.layers.Lambda(lambda x: x[:, meta_timepoints:, :])(input_layer)
+
+    #meta_data = keras.layers.Flatten()(meta_data)
+    # meta_data = keras.layers.Dense(64, activation=None, use_bias=False)(meta_data)  # sparse input (avoid using bias)
+    #meta_data = keras.layers.LeakyReLU(alpha=0.3)(meta_data)
+    #meta_data = keras.layers.Dense(16, activation='tanh')(meta_data)
+    ##meta_data = keras.layers.LeakyReLU(alpha=0.3)(meta_data)
+    #meta_data = keras.layers.RepeatVector(32)(meta_data)
+
+    #output = keras.layers.Concatenate(2)([time_data, meta_data])
+    output = input_layer
+    output = keras.layers.BatchNormalization(axis=-1)(output)
+
+    output = keras.layers.LSTM(512, activation="tanh", recurrent_activation="sigmoid", return_sequences=False)(output)
+    #output = keras.layers.Lambda(lambda x: K.sum(x, axis=1))(output)
+
+    #output = keras.layers.LSTM(64, activation=None, recurrent_activation="sigmoid", return_sequences=True)(output)
+    #output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    #output = keras.layers.LSTM(64, activation=None, recurrent_activation="sigmoid", return_sequences=False)(output)
+    #output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    output = keras.layers.Dense(256, activation=None)(output)
+    output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    output = keras.layers.Dense(256, activation=None)(output)
+    output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    output = keras.layers.Dropout(.1)(output)
+    output = keras.layers.Dense(128, activation=None)(output)
+    output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    output = keras.layers.Dropout(.05)(output)
+    output = keras.layers.Dense(128, activation=None)(output)
+    output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    output = keras.layers.Dropout(.05)(output)
+    output = keras.layers.Dense(128, activation=None)(output)
+    output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    return output
+
+
+def make_convolutional_network(input_layer):
+    # batch x timepoints x features
     meta_timepoints = 2
     meta_data = keras.layers.Lambda(lambda x: x[:, :meta_timepoints, :])(input_layer)
     time_data = keras.layers.Lambda(lambda x: x[:, meta_timepoints:, :])(input_layer)
@@ -184,17 +279,40 @@ def make_recurrent_network(input_layer):
     meta_data = keras.layers.Flatten()(meta_data)
     meta_data = keras.layers.Dense(64, activation=None, use_bias=False)(meta_data)  # sparse input (avoid using bias)
     meta_data = keras.layers.LeakyReLU(alpha=0.3)(meta_data)
-    meta_data = keras.layers.Dense(16, activation='tanh')(meta_data)
-    #meta_data = keras.layers.LeakyReLU(alpha=0.3)(meta_data)
+    output = keras.layers.Dropout(.1)(meta_data)
+    meta_data = keras.layers.Dense(16)(meta_data)
+    meta_data = keras.layers.LeakyReLU(alpha=0.3)(meta_data)
     meta_data = keras.layers.RepeatVector(32)(meta_data)
 
     output = keras.layers.Concatenate(2)([time_data, meta_data])
+    output = keras.layers.Conv1D(66, 3)(output)
+    output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    output = keras.layers.MaxPooling1D(2)(output)
+    output = keras.layers.Dropout(.1)(output)
 
-    output = keras.layers.LSTM(64, activation=None, recurrent_activation="sigmoid", return_sequences=True)(output)
+    output = keras.layers.Conv1D(66, 3)(output)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
-    output = keras.layers.LSTM(64, activation=None, recurrent_activation="sigmoid", return_sequences=True)(output)
+    output = keras.layers.MaxPooling1D(2)(output)
+    output = keras.layers.Dropout(.1)(output)
+
+    output = keras.layers.Conv1D(66, 3)(output)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
-    output = keras.layers.LSTM(64, activation=None, recurrent_activation="sigmoid", return_sequences=False)(output)
+    output = keras.layers.MaxPooling1D(2)(output)
+    output = keras.layers.Dropout(.1)(output)
+
+    output = keras.layers.Conv1D(66, 3)(output)
+    output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    output = keras.layers.MaxPooling1D(2)(output)
+    output = keras.layers.Dropout(.1)(output)
+
+    meta_data = keras.layers.Flatten()(output)
+    output = keras.layers.Dense(256, activation=None)(output)
+    output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    output = keras.layers.Dropout(.1)(output)
+    output = keras.layers.Dense(128, activation=None)(output)
+    output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    output = keras.layers.Dropout(.05)(output)
+    output = keras.layers.Dense(128, activation=None)(output)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
     return output
 
@@ -202,10 +320,11 @@ def make_recurrent_network(input_layer):
 class BasicNetwork:
 
     representation = _representations.ExplicitRepresentation
-    output_framework = PlayabilityOutput
+    output_framework = SplitPlayabilityOutput
     #output_framework = PenaltyOutput
 
     def __init__(self, queue_size=2000, batch_size=16, verbose=0, model_filepath=None, learning_rate=0.00001):  # pylint: disable=too-many-arguments
+        self.online_training = True
         self._batch_size = batch_size
         self.verbose = verbose
         self._queue = _utils.ReplayQueue(queue_size)
@@ -227,12 +346,14 @@ class BasicNetwork:
 
     def train(self, representation, expected):
         self._queue.append((representation, expected))
-        batch_data = self._queue.get_random_selection(self._batch_size)
-        batch_representation, batch_expected = (np.array(x) for x in zip(*batch_data))
-        self.model.fit(batch_representation, batch_expected, batch_size=self._batch_size, epochs=1, verbose=self.verbose)
+        if self.online_training:
+            batch_data = self._queue.get_random_selection(self._batch_size)
+            batch_representation, batch_expected = (np.array(x) for x in zip(*batch_data))
+            self.model.fit(batch_representation, batch_expected, batch_size=self._batch_size, epochs=1, verbose=self.verbose)
 
     def fit(self, batch_size=16, epochs=100, shuffle=True):
-        batch_data = self._queue._data
+        batch_data = list(self._queue._data)
+        np.random.shuffle(batch_data)
         batch_representation, batch_expected = (np.array(x) for x in zip(*batch_data))
         X = np.array(batch_representation)
         y = np.array(batch_expected)

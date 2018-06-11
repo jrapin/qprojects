@@ -47,6 +47,19 @@ class UtilsTests(TestCase):
         output = list(_utils.grouper(iterator, n, fillvalue))
         np.testing.assert_array_equal(output, expected)
 
+    @genty.genty_dataset(
+        fail=([(100, 300)], 1),
+        lower_val=([(400, 300), (200, 350)], 2),
+        lower_val_decrease=([(400, 300), (200, 250), (200, 350)], 3),
+        lower_val_decrease_max=([(400, 300), (200, 250), (200, 200), (200, 100)], 4),
+    )
+    def test_epoch_policy(self, losses, num_expected):
+        policy = _utils.epoch_policy(max_epoch=4, verbose=True)
+        output = [next(policy)]
+        for loss_val_loss in losses:
+            output.append(policy.send(loss_val_loss))
+        np.testing.assert_equal(output, num_expected * [True] + [False])
+
 
 def test_replay_queue():
     queue = _utils.ReplayQueue(3)
