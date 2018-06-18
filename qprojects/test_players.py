@@ -62,6 +62,15 @@ def test_make_recurrent_model_and_compile():
     model.compile(loss=_players.PenaltyOutput.error, optimizer=optimizer)
 
 
+def test_make_conv_model_and_compile():
+    input_data = keras.layers.Input(shape=_players.BasicNetwork.representation.shape)
+    tmp = _players.make_convolutional_network(input_data)
+    output = _players.SplitPlayabilityOutput.make_final_layer(tmp)
+    model = keras.models.Model(input_data, output)
+    optimizer = keras.optimizers.RMSprop(lr=0.0001, rho=0.9, epsilon=1e-08, decay=0.0)
+    model.compile(loss=_players.SplitPlayabilityOutput.error, optimizer=optimizer)
+
+
 def test_basic_player():
     network = _players.BasicNetwork()
     players = [_players.IntelligentPlayer(network) for _ in range(4)]
@@ -125,7 +134,7 @@ class SplitoPlayabilityTests(TestCase):
         correct_playability=(1, 1.334),
         incorrect_playability=(0, 53728.316),
     )
-    def test_masked_mean_squared_error(self, acceptable, expected):
+    def test_error(self, acceptable, expected):
         y_pred = K.variable(np.array([[1, acceptable, 0], [10, 100, 1000]]).T[None, :, :])
         y_true = K.variable(np.array([[1, 1, 0], [12, -1, -1]]).T[None, :, :])
         np.testing.assert_array_equal(y_pred.get_shape(), [1, 3, 2])  # batch x output x (acceptabilities, values)

@@ -162,18 +162,18 @@ class SplitPlayabilityOutput(PlayabilityOutput):
         """
         playabilities = keras.layers.Dense(64, activation=None)(layer)
         playabilities = keras.layers.LeakyReLU(alpha=.2)(playabilities)
-        playabilities = keras.layers.Dense(33, activation="sigmoid")(playabilities)
+        playabilities = keras.layers.Dense(33, activation="sigmoid", name="playability_dense")(playabilities)
         playabilities = keras.layers.Lambda(lambda x: x[:, :, None])(playabilities)
         #
         values = keras.layers.Dense(64, activation=None)(layer)
         values = keras.layers.LeakyReLU(alpha=.2)(values)
-        values = keras.layers.Dense(33)(values)
+        values = keras.layers.Dense(33, name='value_dense')(values)
         values = keras.layers.LeakyReLU(alpha=0.02)(values)
         values = keras.layers.Lambda(lambda x: x[:, :, None])(values)
         return keras.layers.concatenate([playabilities, values], axis=2)
 
     @staticmethod
-    def playability_error(y_true, y_pred):
+    def error(y_true, y_pred):
         """Error mixing a crossentropy for playability classification and squared error for the expectation value
 
         Parameters
@@ -247,24 +247,24 @@ def make_recurrent_network(input_layer):
     output = input_layer
     output = keras.layers.BatchNormalization(axis=-1)(output)
 
-    output = keras.layers.LSTM(512, activation="tanh", recurrent_activation="sigmoid", return_sequences=False)(output)
+    output = keras.layers.LSTM(128, activation="tanh", recurrent_activation="sigmoid", return_sequences=False)(output)
     #output = keras.layers.Lambda(lambda x: K.sum(x, axis=1))(output)
 
     #output = keras.layers.LSTM(64, activation=None, recurrent_activation="sigmoid", return_sequences=True)(output)
     #output = keras.layers.LeakyReLU(alpha=0.3)(output)
     #output = keras.layers.LSTM(64, activation=None, recurrent_activation="sigmoid", return_sequences=False)(output)
     #output = keras.layers.LeakyReLU(alpha=0.3)(output)
-    output = keras.layers.Dense(256, activation=None)(output)
-    output = keras.layers.LeakyReLU(alpha=0.3)(output)
-    output = keras.layers.Dense(256, activation=None)(output)
-    output = keras.layers.LeakyReLU(alpha=0.3)(output)
-    output = keras.layers.Dropout(.1)(output)
     output = keras.layers.Dense(128, activation=None)(output)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
-    output = keras.layers.Dropout(.05)(output)
     output = keras.layers.Dense(128, activation=None)(output)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
-    output = keras.layers.Dropout(.05)(output)
+    #output = keras.layers.Dropout(.1)(output)
+    output = keras.layers.Dense(128, activation=None)(output)
+    output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    #output = keras.layers.Dropout(.05)(output)
+    output = keras.layers.Dense(128, activation=None)(output)
+    output = keras.layers.LeakyReLU(alpha=0.3)(output)
+    #output = keras.layers.Dropout(.05)(output)
     output = keras.layers.Dense(128, activation=None)(output)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
     return output
@@ -277,42 +277,37 @@ def make_convolutional_network(input_layer):
     time_data = keras.layers.Lambda(lambda x: x[:, meta_timepoints:, :])(input_layer)
 
     meta_data = keras.layers.Flatten()(meta_data)
-    meta_data = keras.layers.Dense(64, activation=None, use_bias=False)(meta_data)  # sparse input (avoid using bias)
+    meta_data = keras.layers.Dense(32, activation=None, use_bias=False)(meta_data)  # sparse input (avoid using bias)
     meta_data = keras.layers.LeakyReLU(alpha=0.3)(meta_data)
-    output = keras.layers.Dropout(.1)(meta_data)
-    meta_data = keras.layers.Dense(16)(meta_data)
+    #output = keras.layers.Dropout(.1)(meta_data)
+    meta_data = keras.layers.Dense(12)(meta_data)
     meta_data = keras.layers.LeakyReLU(alpha=0.3)(meta_data)
     meta_data = keras.layers.RepeatVector(32)(meta_data)
 
     output = keras.layers.Concatenate(2)([time_data, meta_data])
-    output = keras.layers.Conv1D(66, 3)(output)
+    output = keras.layers.Conv1D(96, 3)(output)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
     output = keras.layers.MaxPooling1D(2)(output)
-    output = keras.layers.Dropout(.1)(output)
+    #output = keras.layers.Dropout(.1)(output)
 
-    output = keras.layers.Conv1D(66, 3)(output)
+    output = keras.layers.Conv1D(96, 3)(output)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
     output = keras.layers.MaxPooling1D(2)(output)
-    output = keras.layers.Dropout(.1)(output)
+    #output = keras.layers.Dropout(.1)(output)
 
-    output = keras.layers.Conv1D(66, 3)(output)
+    output = keras.layers.Conv1D(96, 3)(output)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
-    output = keras.layers.MaxPooling1D(2)(output)
-    output = keras.layers.Dropout(.1)(output)
+    #output = keras.layers.Dropout(.1)(output)
 
-    output = keras.layers.Conv1D(66, 3)(output)
+    output = keras.layers.Flatten()(output)
+    #output = keras.layers.Dropout(.2)(output)
+    output = keras.layers.Dense(192, activation=None)(output)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
-    output = keras.layers.MaxPooling1D(2)(output)
-    output = keras.layers.Dropout(.1)(output)
-
-    meta_data = keras.layers.Flatten()(output)
-    output = keras.layers.Dense(256, activation=None)(output)
+    #output = keras.layers.Dropout(.2)(output)
+    output = keras.layers.Dense(192, activation=None)(output)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
-    output = keras.layers.Dropout(.1)(output)
-    output = keras.layers.Dense(128, activation=None)(output)
-    output = keras.layers.LeakyReLU(alpha=0.3)(output)
-    output = keras.layers.Dropout(.05)(output)
-    output = keras.layers.Dense(128, activation=None)(output)
+    #output = keras.layers.Dropout(.2)(output)
+    output = keras.layers.Dense(192, activation=None)(output)
     output = keras.layers.LeakyReLU(alpha=0.3)(output)
     return output
 

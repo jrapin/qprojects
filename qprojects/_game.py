@@ -113,9 +113,9 @@ class DefaultPlayer:  # pylint: disable=too-many-instance-attributes
         self._last_playable_cards = self._get_playable_cards(board)
         if selected is None or selected not in self._last_playable_cards:
             #print(np.round(self._get_expectations(board)), len(board.actions))
-            selected = np.random.choice(self._last_playable_cards)
             self._erroneous_selection_count += 1
             self._acceptation_queue.append(False)
+            selected = np.random.choice(self._last_playable_cards)
         else:
             self._acceptation_queue.append(True)
         self._cards.remove(selected)
