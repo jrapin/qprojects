@@ -127,6 +127,8 @@ def epoch_policy(max_epoch=10, verbose=True):
             reason = "Validation loss decreased"
         elif val_loss < loss:
             reason = "Validation loss is lower than loss."
+        if loss / val_loss > 4:
+            reason = ""  # testing is not representative...
         if reason:
             if verbose:
                 print(reason)

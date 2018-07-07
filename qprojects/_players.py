@@ -25,7 +25,7 @@ class IntelligentPlayer(_game.DefaultPlayer):
 
     def set_reward(self, board, value):
         last_player, last_card = board.actions[-1]
-        if np.random.rand() < .3:
+        if np.random.rand() < .3 and self.last_correct + 1 >= len(board.actions):
             value = min(250, value + max(np.max(self.get_model_prediction(board)), 0))
             previous_representation = self._network.representation.create(board, self, no_last=True)
             if last_player == self.order:
@@ -120,7 +120,7 @@ class PlayabilityOutput:
         y_true_values = y_true[:, :, 1]
         mask = K.cast(K.greater(y_true_values, -1), 'float32')
         masked_values_error = (y_pred_values - y_true_values) * mask
-        values_error = K.mean(K.square(masked_values_error), axis=-1)
+        values_error = 0.001 * K.mean(K.square(masked_values_error), axis=-1)
         acceptabilities_error = 10000 * K.mean(K.binary_crossentropy(y_true_playabilities, y_pred_playabilities), axis=-1)
         return values_error + acceptabilities_error
 
@@ -325,7 +325,7 @@ class BasicNetwork:
         self._queue = _utils.ReplayQueue(queue_size)
         if model_filepath is None or not os.path.exists(model_filepath):
             input_data = keras.layers.Input(shape=self.representation.shape)
-            temp = make_recurrent_network(input_data)
+            temp = make_basic_network(input_data)
             output = self.output_framework.make_final_layer(temp)
             self.model = keras.models.Model(input_data, output)
         else:

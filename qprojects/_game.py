@@ -22,20 +22,24 @@ class DefaultPlayer:  # pylint: disable=too-many-instance-attributes
     """
 
     def __init__(self):
-        self._cards = _deck.CardList([])
-        self._initial_cards = _deck.CardList([])  # keep a record of initial cards for each game
+        self._cards = None
+        self._initial_cards = None  # keep a record of initial cards for each game
         self._order = None
+        self.last_correct = None
+        self._last_playable_cards = None
         self._card_played_count = 0
         self._erroneous_selection_count = 0
-        self._last_playable_cards = None
         self._acceptation_queue = _utils.ReplayQueue(1000)
         self.reward_sum = 0
+        self._last_acceptable = _utils.ReplayQueue(1000)
+        self.reinitialize()
 
     def reinitialize(self):
         self._cards = _deck.CardList([])
         self._last_playable_cards = None
         self._initial_cards = _deck.CardList([])  # keep a record of initial cards for each game
         self._order = None
+        self.last_correct = 32
 
     def get_acceptation_ratio(self):
         """Ratio of card proposition which have been accepted (allowed to play)
@@ -46,6 +50,11 @@ class DefaultPlayer:  # pylint: disable=too-many-instance-attributes
         """Ratio of card proposition which have been accepted (allowed to play)
         """
         return np.mean(self._acceptation_queue._data)
+
+    def get_mean_acceptable(self):
+        """Ratio of card proposition which have been accepted (allowed to play)
+        """
+        return np.mean(self._last_acceptable._data)
 
     @property
     def initial_cards(self):
@@ -78,6 +87,7 @@ class DefaultPlayer:  # pylint: disable=too-many-instance-attributes
         assert not self._cards, "Cannot initialize a new game when card are still at play: {}".format(self._cards)
         assert len(cards) == 8, "Wrong number of cards for initialization: {}.".format(self._cards)
         self._cards = cards
+        self.last_correct = 32
         self._initial_cards = _deck.CardList(cards)
         self._order = order
 
@@ -116,6 +126,10 @@ class DefaultPlayer:  # pylint: disable=too-many-instance-attributes
             self._erroneous_selection_count += 1
             self._acceptation_queue.append(False)
             selected = np.random.choice(self._last_playable_cards)
+            card_num = len(board.actions)
+            if self.last_correct >= card_num:
+                self.last_correct = card_num
+                self._last_acceptable.append(card_num)
         else:
             self._acceptation_queue.append(True)
         self._cards.remove(selected)

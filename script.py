@@ -4,13 +4,13 @@ import qprojects
 import keras
 
 
-#network = qprojects.BasicNetwork(model_filepath="split_playability_conv_21.h5", verbose=0, learning_rate=0.01)
-network = qprojects.BasicNetwork(model_filepath=None, verbose=0, learning_rate=0.01)
+network = qprojects.BasicNetwork(model_filepath="basic_start_17.h5", verbose=0, learning_rate=0.01)
+#network = qprojects.BasicNetwork(model_filepath=None, verbose=0, learning_rate=0.01)
 network.online_training = False
 players = [qprojects.IntelligentPlayer(network) for _ in range(4)]
 
 #learning_rate = 0.000001
-learning_rate = 0.0001
+learning_rate = 0.00001
 #optimizer = keras.optimizers.SGD(lr=learning_rate, nesterov=False)
 optimizer = keras.optimizers.RMSprop(lr=learning_rate, clipnorm=1)
 network.model.compile(loss=network.output_framework.error, optimizer=optimizer)
@@ -23,7 +23,7 @@ def play_a_game(players, verbose=False):
     return board
 
 
-learning_rate = 0.0001  # .001 decreased to .0002
+learning_rate = 0.000001  # .001 decreased to .0002
 #optimizer = keras.optimizers.SGD(lr=learning_rate, nesterov=False)
 optimizer = keras.optimizers.RMSprop(lr=learning_rate)  # , clipnorm=1)
 network.model.compile(loss=network.output_framework.error, optimizer=optimizer)
@@ -31,25 +31,27 @@ network.model.compile(loss=network.output_framework.error, optimizer=optimizer)
 
 num_external_iter = 0
 batch_size = 16
-for p in players:
-    p.reinitialize()
 while True:
     for k in range(50):
         if not (k + 1) % 10:
             print(num_external_iter + 1, k + 1)
+        for p in players:
+            p.reinitialize()
         board = play_a_game(players, verbose=False)
     print("Acceptation ratio: {}".format(players[0].get_instantaneous_acceptation_ratio()))
+    print("Last acceptable: {}".format(players[0].get_mean_acceptable()))
     num_external_iter += 1
     #
-    policy = qprojects.epoch_policy(max_epoch=10)
+    policy = qprojects.epoch_policy(max_epoch=5)
     cond = next(policy)  # prime the policy
     while cond:
-        output = network.fit(epochs=4, batch_size=batch_size)
+        output = network.fit(epochs=1, batch_size=batch_size)
         cond = policy.send((output.history['loss'][-1], output.history['val_loss'][-1]))
 
 
 # network.model.save("penalty_71.h5")
 network.model.save("split_playability_conv_37.h5")
+network.model.save("basic_start_19.h5")
 
 # examples
 index = np.random.randint(len(network._queue))
