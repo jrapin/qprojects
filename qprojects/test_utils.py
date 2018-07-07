@@ -60,6 +60,37 @@ class UtilsTests(TestCase):
             output.append(policy.send(loss_val_loss))
         np.testing.assert_equal(output, num_expected * [True] + [False])
 
+    @genty.genty_dataset(
+        with_list=([1, 2, 3], [1, 2, 3]),
+        with_gen=((x for x in [1, 2, 3]), [1, 2, 3]),
+    )
+    def test_memory_iterator(self, iterable, expected):
+        iterable = [1, 2, 3]
+        expected = [1, 2, 3]
+        memo = _utils.MemoryIterator(iterable)
+        nexts, lasts, lasts2 = [], [], []
+        for value in memo:
+            nexts.append(value)
+            lasts.append(memo.last)
+            lasts2.append(memo.last)
+        np.testing.assert_array_equal(nexts, expected)
+        np.testing.assert_array_equal(lasts, expected)
+        np.testing.assert_array_equal(lasts2, expected)
+
+
+def test_memory_iterator_with_coroutine():
+
+    def coroutine():
+        value = yield 12
+        for _ in range(2):
+            value = yield value
+
+    memo = _utils.MemoryIterator(coroutine())
+    np.testing.assert_equal(next(memo), 12)  # priming
+    np.testing.assert_equal(memo.last, 12)
+    np.testing.assert_equal(memo.send(1), 1)
+    np.testing.assert_equal(memo.last, 1)
+
 
 def test_replay_queue():
     queue = _utils.ReplayQueue(3)

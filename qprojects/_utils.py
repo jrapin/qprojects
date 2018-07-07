@@ -137,3 +137,27 @@ def epoch_policy(max_epoch=10, verbose=True):
         else:
             break
     yield False
+
+
+class MemoryIterator:
+    """Iterator with a memory of last element
+    """
+
+    def __init__(self, iterable):
+        self._iter = iter(iterable)
+        self._last = None
+
+    @property
+    def last(self):
+        return self._last
+
+    def __next__(self):
+        self._last = next(self._iter)
+        return self._last
+
+    def send(self, value):
+        self._last = self._iter.send(value)
+        return self._last
+
+    def __iter__(self):
+        return self
