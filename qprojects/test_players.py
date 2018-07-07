@@ -84,8 +84,8 @@ def test_basic_player():
 class PlayabilityTests(TestCase):
 
     @genty.genty_dataset(
-        correct_playability=(1, 1.33),
-        incorrect_playability=(0, 53728.32),
+        correct_playability=(1, 0.),
+        incorrect_playability=(0, 53726.98),
     )
     def test_error(self, acceptable, expected):
         y_pred = K.variable(np.array([[1, acceptable, 0], [10, 100, 1000]]).T[None, :, :])
